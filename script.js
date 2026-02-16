@@ -1,32 +1,38 @@
-function takeMed() {
-  localStorage.setItem("medStatus", "taken");
-  alert("บันทึกว่ากินยาแล้ว");
+// Initialize Lucide Icons
+lucide.createIcons();
+
+// Set Current Date
+const options = { weekday: 'long', month: 'short', day: 'numeric' };
+const dateElement = document.getElementById('current-date');
+if (dateElement) {
+    dateElement.innerText = new Date().toLocaleDateString('en-US', options);
 }
 
-function missMed() {
-  localStorage.setItem("medStatus", "missed");
-  alert("กรุณากินยาให้ครบตามแพทย์สั่ง");
+// Simple State Management
+function markTaken(btn) {
+    const card = btn.closest('.dose-card');
+    btn.innerHTML = '<i data-lucide="check" class="w-4 h-4 mx-auto"></i>';
+    btn.classList.remove('bg-primary', 'bg-slate-900');
+    btn.classList.add('bg-green-500');
+    card.style.borderColor = '#22c55e';
+    lucide.createIcons();
+    
+    setTimeout(() => {
+        alert('บันทึกการกินยาเรียบร้อยแล้ว!');
+    }, 100);
 }
 
-function showPage(id) {
-  document.querySelector(".app").classList.add("hidden");
-  document.querySelectorAll(".page").forEach(p => p.classList.add("hidden"));
-  document.getElementById(id).classList.remove("hidden");
-}
-
-function goHome() {
-  document.querySelector(".app").classList.remove("hidden");
-  document.querySelectorAll(".page").forEach(p => p.classList.add("hidden"));
-}
-
-function saveLog() {
-  const text = document.getElementById("symptom").value;
-  if (!text) return;
-
-  const logList = document.getElementById("logList");
-  const p = document.createElement("p");
-  p.textContent = new Date().toLocaleString() + " : " + text;
-  logList.appendChild(p);
-
-  document.getElementById("symptom").value = "";
+// Configure Tailwind
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                primary: '#EA205E',
+                secondary: '#F1F5F9',
+                foreground: '#0F172A',
+                muted: '#64748B',
+                border: '#E2E8F0',
+            }
+        }
+    }
 }
