@@ -1,137 +1,33 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SeizGuard - Medication Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.344.0/lucide.min.css">
+    <title>SeizGuard ชักไม่ซ้ำ</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen pb-24">
-
-    <!-- Header -->
-    <header class="px-6 pt-12 pb-6 bg-white border-b border-slate-100 sticky top-0 z-10">
-        <div class="flex justify-between items-start">
-            <div>
-                <h2 id="current-date" class="text-slate-500 font-medium text-base mb-1">Monday, Feb 16</h2>
-                <h1 class="text-3xl font-bold text-slate-900">SeizGuard</h1>
-            </div>
-            <div class="flex flex-col items-end">
-                <div class="w-10 h-10 rounded-full bg-pink-50 flex items-center justify-center text-primary mb-1">
-                    <i data-lucide="sun" class="w-6 h-6"></i>
-                </div>
-                <span class="text-[10px] font-bold text-primary uppercase tracking-tighter">ชักไม่ซ้ำ</span>
+<body>
+    <div id="app">
+        <div class="login-container">
+            <div class="card">
+                <div class="logo">Nc</div>
+                <h1>SeizGuard ชักไม่ซ้ำ</h1>
+                <p>Epilepsy management made simple.</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" required placeholder="Enter your username">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" required placeholder="••••••••">
+                    </div>
+                    <button type="submit">Sign In</button>
+                    <p class="footer-text">Don't have an account? <a href="#">Create one</a></p>
+                </form>
             </div>
         </div>
-    </header>
-
-    <main class="px-4 py-6 space-y-8 max-w-md mx-auto">
-        <!-- Missed Dose Helper -->
-        <section class="bg-pink-50/50 border border-pink-100 rounded-3xl p-5">
-            <h3 class="font-bold text-primary mb-2 flex items-center gap-2">
-                <i data-lucide="pill" class="w-4 h-4"></i> ลืมกินยา?
-            </h3>
-            <p class="text-sm text-slate-600 mb-4">ตรวจสอบว่าควรทำอย่างไรเมื่อลืมกินยากันชัก</p>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="alert('คำแนะนำเบื้องต้น: หากเพิ่งลืมไม่นานให้ทานทันที แต่ถ้าใกล้เวลามื้อถัดไปให้ข้ามมื้อนี้ไปเลย ห้ามทานเพิ่มเป็น 2 เท่า')" 
-                        class="rounded-xl border border-pink-200 text-primary hover:bg-pink-50 bg-white h-auto py-3 px-2 flex flex-col items-center gap-1 transition-colors">
-                    <span class="text-xs font-bold">เพิ่งนึกได้</span>
-                    <span class="text-[10px] opacity-70 font-normal">กินทันที</span>
-                </button>
-                <button onclick="alert('คำแนะนำ: หากใกล้เวลามื้อถัดไปแล้ว ให้ข้ามมื้อที่ลืมไปได้เลย และทานมื้อถัดไปตามปกติ ห้ามทานเบิ้ล 2 เท่า')" 
-                        class="rounded-xl border border-red-100 text-red-600 hover:bg-red-50 bg-white h-auto py-3 px-2 flex flex-col items-center gap-1 transition-colors">
-                    <span class="text-xs font-bold">ใกล้รอบหน้า</span>
-                    <span class="text-[10px] opacity-70 font-normal">รอรอบถัดไป</span>
-                </button>
-            </div>
-        </section>
-
-        <!-- Next Dose Highlight -->
-        <section id="next-dose-section">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-slate-900">Next Dose</h2>
-                <span class="text-xs font-medium px-2 py-1 bg-pink-100 text-primary rounded-full">Due Soon</span>
-            </div>
-            <div class="transform scale-105 origin-top-left">
-                <div class="bg-white rounded-2xl p-4 border border-slate-100 card-shadow flex gap-4 dose-card">
-                    <div class="w-12 h-12 rounded-2xl bg-pink-50 flex items-center justify-center text-primary shrink-0">
-                        <i data-lucide="pill" class="w-6 h-6"></i>
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex justify-between items-start mb-1">
-                            <h3 class="font-bold text-slate-900">Keppra</h3>
-                            <span class="text-sm font-bold text-primary">08:00</span>
-                        </div>
-                        <p class="text-xs text-slate-500 mb-3">500mg • หลังอาหารทันที</p>
-                        <div class="flex gap-2">
-                            <button onclick="markTaken(this)" class="flex-1 bg-primary text-white text-xs font-bold py-2 rounded-lg hover:opacity-90 transition-opacity">กินแล้ว</button>
-                            <button onclick="this.closest('.dose-card').style.opacity='0.5'" class="px-3 bg-slate-50 text-slate-400 py-2 rounded-lg hover:bg-slate-100 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- Timeline -->
-        <section>
-            <div class="flex items-center gap-2 mb-4">
-                <i data-lucide="calendar" class="w-5 h-5 text-slate-400"></i>
-                <h2 class="text-lg font-semibold text-slate-900">Today's Schedule</h2>
-            </div>
-            <div class="space-y-4" id="schedule-list">
-                <div class="bg-white rounded-2xl p-4 border border-slate-100 flex gap-4 dose-card">
-                    <div class="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0">
-                        <i data-lucide="pill" class="w-6 h-6"></i>
-                    </div>
-                    <div class="flex-1">
-                        <div class="flex justify-between items-start mb-1">
-                            <h3 class="font-bold text-slate-900">Vimpat</h3>
-                            <span class="text-sm font-bold text-slate-400">20:00</span>
-                        </div>
-                        <p class="text-xs text-slate-500 mb-3">100mg • ก่อนนอน</p>
-                        <div class="flex gap-2">
-                            <button onclick="markTaken(this)" class="flex-1 bg-slate-900 text-white text-xs font-bold py-2 rounded-lg hover:bg-slate-800 transition-colors">กินแล้ว</button>
-                            <button onclick="this.closest('.dose-card').style.opacity='0.5'" class="px-3 bg-slate-50 text-slate-400 py-2 rounded-lg hover:bg-slate-100 transition-colors"><i data-lucide="x" class="w-4 h-4"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Bottom Nav -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 pb-safe pt-2 px-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-50">
-        <div class="flex items-center justify-between max-w-md mx-auto">
-            <a href="#" class="flex flex-col items-center gap-1 p-2 text-primary w-16">
-                <i data-lucide="home" class="w-6 h-6"></i>
-                <span class="text-[10px] font-medium">Today</span>
-            </a>
-            <a href="#" class="flex flex-col items-center gap-1 p-2 text-slate-400 w-16">
-                <i data-lucide="pill" class="w-6 h-6"></i>
-                <span class="text-[10px] font-medium">Meds</span>
-            </a>
-            
-            <div class="-mt-8 flex flex-col items-center">
-                <button onclick="alert('ฟีเจอร์บันทึกอาการชัก (Seizure Log) กำลังเตรียมใช้งาน')" class="flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-red-600 to-red-400 text-white shadow-lg shadow-red-500/30 hover:shadow-red-500/50 hover:scale-105 active:scale-95 transition-all duration-300">
-                    <i data-lucide="plus-circle" class="w-8 h-8"></i>
-                </button>
-                <div class="text-center mt-1 text-[10px] font-medium text-red-600">Log Event</div>
-            </div>
-
-            <a href="#" class="flex flex-col items-center gap-1 p-2 text-slate-400 w-16">
-                <i data-lucide="activity" class="w-6 h-6"></i>
-                <span class="text-[10px] font-medium">History</span>
-            </a>
-            <a href="#" class="flex flex-col items-center gap-1 p-2 text-slate-400 w-16">
-                <i data-lucide="book-open" class="w-6 h-6"></i>
-                <span class="text-[10px] font-medium">Learn</span>
-            </a>
-        </div>
-    </nav>
-
-    <script src="https://unpkg.com/lucide@latest"></script>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
