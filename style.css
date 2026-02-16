@@ -1,106 +1,24 @@
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f3f6fb;
+    font-family: 'Inter', sans-serif;
+    background-color: rgba(241, 245, 249, 0.5);
 }
-
-.app {
-  max-width: 390px;
-  margin: auto;
-  background: #ffffff;
-  min-height: 100vh;
+.pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
 }
-
-header {
-  background: #2f80ed;
-  color: white;
-  text-align: center;
-  padding: 15px;
+.card-shadow {
+    box-shadow: 0 10px 30px -10px rgba(255, 92, 138, 0.15);
 }
-
-header h1 {
-  margin: 0;
+@keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-5px); }
+    100% { transform: translateY(0px); }
 }
-
-.profile {
-  display: flex;
-  align-items: center;
-  padding: 15px;
+.animate-float {
+    animation: float 3s ease-in-out infinite;
 }
-
-.avatar {
-  font-size: 40px;
-  margin-right: 10px;
+.dose-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-.medicine-card {
-  background: #e9f0ff;
-  margin: 15px;
-  padding: 15px;
-  border-radius: 15px;
-}
-
-.med-item {
-  background: white;
-  padding: 10px;
-  border-radius: 10px;
-}
-
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-button {
-  padding: 10px;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-}
-
-.taken {
-  background: #4caf50;
-  color: white;
-}
-
-.missed {
-  background: #f44336;
-  color: white;
-}
-
-.menu {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  padding: 15px;
-}
-
-.menu button {
-  background: #f1f4f9;
-}
-
-.sos {
-  background: #ff3b3b;
-  color: white;
-}
-
-.page {
-  padding: 20px;
-}
-
-.big {
-  width: 100%;
-  padding: 20px;
-  font-size: 20px;
-}
-
-.hidden {
-  display: none;
-}
-
-input {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 10px;
+.dose-card:active {
+    transform: scale(0.98);
 }
