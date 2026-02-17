@@ -2,156 +2,116 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>SeizGuard - ชักไม่ซ้ำ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeizGuard - เข้าสู่ระบบ</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-[#F8F9FE] font-['Sarabun'] text-[#1E293B]">
-    <div id="app" class="min-h-screen pb-24">
-        <!-- View Container -->
-        <div id="view-container">
-            <!-- Home View (Today) -->
-            <section id="home-view" class="view active">
-                <header class="px-6 pt-12 pb-6 bg-white border-b border-gray-100 sticky top-0 z-10">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <h2 id="current-date" class="text-gray-400 font-medium text-sm mb-1">Sunday, Feb 16</h2>
-                            <h1 class="text-2xl font-bold text-gray-900">สวัสดี, <span id="user-display-name">ผู้ใช้งาน</span></h1>
-                        </div>
-                        <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-500">
-                            <i class="fas fa-sun text-xl"></i>
-                        </div>
-                    </div>
-                </header>
-
-                <main class="px-4 py-6 space-y-8 max-w-md mx-auto">
-                    <!-- Next Dose -->
-                    <section id="next-dose-section">
-                        <div class="flex items-center justify-between mb-4">
-                            <h2 class="text-lg font-semibold text-gray-900">มื้อถัดไป</h2>
-                            <span class="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full uppercase tracking-wider">เร็วๆ นี้</span>
-                        </div>
-                        <div id="next-dose-container">
-                            <!-- Injected by JS -->
-                        </div>
-                    </section>
-
-                    <!-- Today's Schedule -->
-                    <section>
-                        <div class="flex items-center gap-2 mb-4">
-                            <i class="far fa-calendar-alt text-gray-400"></i>
-                            <h2 class="text-lg font-semibold text-gray-900">ตารางวันนี้</h2>
-                        </div>
-                        <div id="today-schedule-container" class="space-y-4">
-                            <!-- Injected by JS -->
-                        </div>
-                    </section>
-                </main>
-            </section>
-
-            <!-- Medications View -->
-            <section id="medications-view" class="view">
-                <header class="px-6 pt-12 pb-6 bg-white border-b border-gray-100 sticky top-0 z-10">
-                    <div class="flex justify-between items-center max-w-md mx-auto">
-                        <h1 class="text-2xl font-bold text-gray-900">ยาของฉัน</h1>
-                        <button id="add-med-btn" class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
-                </header>
-                <main id="med-list-container" class="px-4 py-6 max-w-md mx-auto space-y-4">
-                    <!-- Injected by JS -->
-                </main>
-            </section>
-
-            <!-- History View -->
-            <section id="history-view" class="view">
-                <header class="px-6 pt-12 pb-6 bg-white border-b border-gray-100 sticky top-0 z-10">
-                    <h1 class="text-2xl font-bold text-gray-900">ประวัติการทานยา</h1>
-                </header>
-                <main class="px-4 py-6 max-w-md mx-auto">
-                    <div class="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm text-center">
-                        <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <i class="fas fa-chart-pie text-2xl"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">ความร่วมมือในการทานยา</h3>
-                        <div class="relative pt-1">
-                            <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-blue-50">
-                                <div id="history-progress" style="width:0%" class="shadow-none flex flex-col text-center white-space-nowrap text-white justify-center bg-blue-500 transition-all duration-500"></div>
-                            </div>
-                        </div>
-                        <p id="history-stats-text" class="text-sm text-gray-500 font-medium">คุณทานยาครบ 0% ในสัปดาห์นี้</p>
-                    </div>
-                </main>
-            </section>
-
-            <!-- Education View -->
-            <section id="education-view" class="view">
-                <header class="px-6 pt-12 pb-6 bg-white border-b border-gray-100 sticky top-0 z-10">
-                    <h1 class="text-2xl font-bold text-gray-900">เรียนรู้</h1>
-                </header>
-                <main class="px-4 py-6 max-w-md mx-auto space-y-4">
-                    <div class="bg-white rounded-3xl p-5 border border-gray-100 shadow-sm">
-                        <h3 class="font-bold text-lg mb-2">ทำไมต้องทานยากันชัก?</h3>
-                        <p class="text-sm text-gray-600 leading-relaxed">ยากันชัก (AEDs) มีความสำคัญอย่างยิ่งในการป้องกันการชักซ้ำ โดยเฉพาะหลังการบาดเจ็บที่ศีรษะ (Head Injury) เพื่อลดความเสี่ยงความเสียหายของสมองในระยะยาว</p>
-                        <div class="mt-4 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                            <h4 class="text-xs font-bold text-blue-600 uppercase mb-1">ข้อมูลวิจัยอ้างอิง</h4>
-                            <p class="text-xs text-blue-800 italic">"การให้ยาในกลุ่ม AEDs ช่วยลด Early Post-Traumatic Seizures (PTS) ได้อย่างมีนัยสำคัญในช่วง 7 วันแรก" - Cochrane Review</p>
-                        </div>
-                    </div>
-                    <!-- Additional Education Content -->
-                </main>
-            </section>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <span>Sg</span>
+            </div>
+            <h1>SeizGuard</h1>
+            <p>ระบบติดตามการใช้ยาประจำวัน</p>
         </div>
 
-        <!-- Bottom Navigation -->
-        <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 pb-safe pt-2 px-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-50">
-            <div class="flex items-center justify-between max-w-md mx-auto">
-                <button class="nav-btn active" data-view="home-view">
-                    <i class="fas fa-home"></i>
-                    <span>วันนี้</span>
-                </button>
-                <button class="nav-btn" data-view="medications-view">
-                    <i class="fas fa-pills"></i>
-                    <span>ยา</span>
-                </button>
-                
-                <!-- Center Button -->
-                <div class="-mt-10 flex flex-col items-center">
-                    <button id="log-seizure-btn" class="w-14 h-14 rounded-full bg-gradient-to-tr from-rose-500 to-red-500 text-white shadow-lg shadow-red-500/30 flex items-center justify-center transition-transform hover:scale-105 active:scale-95">
-                        <i class="fas fa-plus-circle text-2xl"></i>
+        <!-- Login/Register Card -->
+        <div class="card">
+            <!-- Login Form -->
+            <div id="loginSection" class="form-section">
+                <h2>เข้าสู่ระบบ</h2>
+                <p>กรุณากรอกชื่อผู้ใช้และรหัสผ่านของคุณ</p>
+
+                <form id="loginForm">
+                    <!-- Error Alert -->
+                    <div id="loginErrorAlert" class="alert error">
+                        <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="alert-text" id="loginErrorMessage"></div>
+                    </div>
+
+                    <!-- Username Field -->
+                    <div class="form-group">
+                        <label for="loginUsername">ชื่อผู้ใช้</label>
+                        <input type="text" id="loginUsername" name="username" placeholder="กรุณากรอกชื่อผู้ใช้" required>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="form-group">
+                        <label for="loginPassword">รหัสผ่าน</label>
+                        <input type="password" id="loginPassword" name="password" placeholder="กรุณากรอกรหัสผ่าน" required>
+                    </div>
+
+                    <!-- Login Button -->
+                    <button type="submit" class="submit-btn" id="loginSubmitBtn">
+                        <span id="loginBtnText">เข้าสู่ระบบ</span>
                     </button>
-                    <span class="text-[10px] font-bold text-rose-500 mt-1">จดอาการชัก</span>
+                </form>
+
+                <!-- Register Link -->
+                <div class="toggle-link">
+                    ยังไม่มีบัญชี? <a href="#" id="showRegisterLink">สร้างบัญชีใหม่</a>
                 </div>
-
-                <button class="nav-btn" data-view="history-view">
-                    <i class="fas fa-history"></i>
-                    <span>ประวัติ</span>
-                </button>
-                <button class="nav-btn" data-view="education-view">
-                    <i class="fas fa-book-open"></i>
-                    <span>เรียนรู้</span>
-                </button>
             </div>
-        </nav>
-    </div>
 
-    <!-- Modals (Simple Implementations) -->
-    <div id="modal-overlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
-        <!-- Add Medication Modal -->
-        <div id="add-med-modal" class="modal bg-white rounded-3xl w-full max-w-sm p-6 space-y-4 hidden">
-            <h2 class="text-xl font-bold">เพิ่มยาใหม่</h2>
-            <input type="text" id="new-med-name" placeholder="ชื่อยา" class="w-full p-3 rounded-xl border border-gray-100 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <input type="text" id="new-med-dosage" placeholder="ขนาดยา (เช่น 100mg)" class="w-full p-3 rounded-xl border border-gray-100 bg-gray-50">
-            <input type="time" id="new-med-time" class="w-full p-3 rounded-xl border border-gray-100 bg-gray-50">
-            <div class="flex gap-2 pt-2">
-                <button id="cancel-med" class="flex-1 p-3 rounded-xl bg-gray-100 font-bold text-gray-600">ยกเลิก</button>
-                <button id="save-med" class="flex-1 p-3 rounded-xl bg-blue-500 font-bold text-white shadow-lg shadow-blue-500/20">บันทึก</button>
+            <!-- Register Form -->
+            <div id="registerSection" class="form-section" style="display: none;">
+                <h2>สร้างบัญชีใหม่</h2>
+                <p>กรุณากรอกข้อมูลเพื่อสร้างบัญชี</p>
+
+                <form id="registerForm">
+                    <!-- Success Alert -->
+                    <div id="registerSuccessAlert" class="alert success">
+                        <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="alert-text">ลงทะเบียนสำเร็จ! กำลังนำไปยังหน้าเข้าสู่ระบบ...</div>
+                    </div>
+
+                    <!-- Error Alert -->
+                    <div id="registerErrorAlert" class="alert error">
+                        <svg class="alert-icon" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                        </svg>
+                        <div class="alert-text" id="registerErrorMessage"></div>
+                    </div>
+
+                    <!-- Username Field -->
+                    <div class="form-group">
+                        <label for="registerUsername">ชื่อผู้ใช้</label>
+                        <input type="text" id="registerUsername" name="username" placeholder="กรุณากรอกชื่อผู้ใช้" required>
+                    </div>
+
+                    <!-- Password Field -->
+                    <div class="form-group">
+                        <label for="registerPassword">รหัสผ่าน</label>
+                        <input type="password" id="registerPassword" name="password" placeholder="กรุณากรอกรหัสผ่าน" required>
+                    </div>
+
+                    <!-- Confirm Password Field -->
+                    <div class="form-group">
+                        <label for="registerConfirmPassword">ยืนยันรหัสผ่าน</label>
+                        <input type="password" id="registerConfirmPassword" name="confirmPassword" placeholder="กรุณายืนยันรหัสผ่าน" required>
+                    </div>
+
+                    <!-- Register Button -->
+                    <button type="submit" class="submit-btn" id="registerSubmitBtn">
+                        <span id="registerBtnText">สร้างบัญชี</span>
+                    </button>
+                </form>
+
+                <!-- Login Link -->
+                <div class="toggle-link">
+                    มีบัญชีอยู่แล้ว? <a href="#" id="showLoginLink">เข้าสู่ระบบ</a>
+                </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <p class="footer">© 2026 SeizGuard. สงวนลิขสิทธิ์ทั้งหมด</p>
     </div>
 
     <script src="script.js"></script>
