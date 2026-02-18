@@ -1,158 +1,266 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SeizGuard - ชักไม่ซ้ำ</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SeizGuard - ชักไม่ซ้ำ</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
 </head>
 <body>
-    <div class="app-container">
-        <header class="main-header">
-            <div class="header-left">
-                <div class="logo-box">Sg</div>
-                <div class="header-text">
-                    <span class="date-text" id="headerDate">Monday, Feb 16</span>
-                    <h1>SeizGuard</h1>
-                    <p>ชักไม่ซ้ำ - Epilepsy management.</p>
-                </div>
-            </div>
-            <div class="header-right">
-                <i class="fas fa-sun weather-icon"></i>
-            </div>
-        </header>
-
-        <section id="loginSection" class="content-section">
-            <div class="card login-card">
-                <h3>Sign In</h3>
-                <form id="loginForm">
-                    <input type="text" placeholder="Enter your username" required>
-                    <input type="password" placeholder="Password" required>
-                    <button type="submit" class="btn-primary">Sign In</button>
-                    <a href="#" class="toggle-link">สร้างบัญชีใหม่</a>
-                </form>
-            </div>
-        </section>
-
-        <section id="dashboardSection" class="content-section" style="display: none;">
-            
-            <div class="grid-layout">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>My Medications</h3>
-                        <button class="btn-small-pink">+ Add Medication</button>
-                    </div>
-                    <div class="med-status">
-                        <i class="fas fa-pills empty-icon"></i>
-                        <p>No medications yet</p>
-                        <button class="btn-pink-outline">+ Add Medication</button>
-                    </div>
-                </div>
-
-                <div class="card help-card">
-                    <div class="card-icon-round">?</div>
-                    <h3>ลืมกินยา?</h3>
-                    <p>ระบบช่วยตัดสินใจตามหลักการแพทย์</p>
-                    <div class="btn-group">
-                        <button onclick="checkMissedDose('now')" class="btn-action pink">กินทันที!</button>
-                        <button onclick="checkMissedDose('wait')" class="btn-action dark-pink">รอดูรอบหน้า</button>
-                    </div>
-                    <a href="#" class="read-article" onclick="switchTab('learn')">Read Article →</a>
-                </div>
-
-                <div class="card">
-                    <div class="card-header-icon">
-                        <i class="far fa-calendar-alt"></i>
-                        <h3>Today's Schedule</h3>
-                    </div>
-                    <p class="empty-text">No medications scheduled for today.</p>
-                </div>
-
-                <div class="card stat-card pink-bg">
-                    <div class="stat-header">
-                        <i class="fas fa-chart-line"></i> ADHERENCE RATE
-                    </div>
-                    <div class="stat-value">0%</div>
-                    <div class="stat-details">
-                        <span><i class="check-icon"></i> 0 Taken</span>
-                        <span><i class="miss-icon"></i> 0 Missed</span>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3>Weekly Adherence</h3>
-                    <div class="stat-value-large">0%</div>
-                    <div class="chart-container">
-                        <div class="bar" style="height: 40%;"></div>
-                        <div class="bar highlight" style="height: 70%;"></div>
-                        <div class="bar" style="height: 50%;"></div>
-                        <div class="bar yellow" style="height: 80%;"></div>
-                        <div class="bar" style="height: 60%;"></div>
-                        <div class="bar" style="height: 90%;"></div>
-                        <div class="bar" style="height: 40%;"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="learnSection" class="content-section" style="display: none;">
-            <div class="card">
-                <h2>📚 สุขศึกษา & งานวิจัย</h2>
-                <div class="edu-item">
-                    <h4>ทำไมต้องกินยากันชักหลัง Head Injury?</h4>
-                    <p>เพื่อป้องกัน Early Post-traumatic Seizure (ภายใน 7 วันแรก) ซึ่งมีหลักฐานเชิงประจักษ์ว่าช่วยลดอัตราการชักเฉียบพลันได้</p>
-                </div>
-                <hr>
-                <div class="edu-item">
-                    <h4>ถ้าลืมกินยากันชักควรทำอย่างไร?</h4>
-                    <ul>
-                        <li>นึกได้ไม่นาน -> กินทันที</li>
-                        <li>ใกล้เวลามื้อถัดไป -> ข้ามมื้อที่ลืม</li>
-                        <li>ห้ามกินเป็น 2 เท่า</li>
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <nav class="bottom-nav">
-            <div class="nav-item active" onclick="switchTab('today')">
-                <i class="fas fa-home"></i>
-                <span>Today</span>
-            </div>
-            <div class="nav-item" onclick="switchTab('meds')">
-                <i class="fas fa-capsules"></i>
-                <span>Meds</span>
-            </div>
-            <div class="nav-item main-btn" onclick="openLogEvent()">
-                <div class="fab">
-                    <i class="fas fa-plus"></i>
-                </div>
-                <span class="fab-label">Log Event</span>
-            </div>
-            <div class="nav-item" onclick="switchTab('history')">
-                <i class="fas fa-wave-square"></i>
-                <span>History</span>
-            </div>
-            <div class="nav-item" onclick="switchTab('learn')">
-                <i class="fas fa-book-open"></i>
-                <span>Learn</span>
-            </div>
-        </nav>
-    </div>
-
-    <div id="logModal" class="modal">
-        <div class="modal-content">
-            <h3>บันทึกอาการชัก / ผลข้างเคียง</h3>
-            <select id="symptom">
-                <option value="none">ไม่มีอาการปกติ</option>
-                <option value="seizure">มีอาการชัก</option>
-                <option value="side-effect">ผลข้างเคียงยา (ง่วง/เซ/ผื่น)</option>
-            </select>
-            <button onclick="closeLogEvent()" class="btn-primary">บันทึกข้อมูล</button>
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen" class="screen active">
+    <div class="login-container">
+      <div class="login-logo">
+        <i class="fas fa-shield-heart"></i>
+      </div>
+      <h1 class="login-title">SeizGuard</h1>
+      <p class="login-subtitle">ชักไม่ซ้ำ</p>
+      <p class="login-desc">ระบบติดตามยากันชักสำหรับผู้ป่วยและผู้ดูแล</p>
+      <div class="login-form">
+        <div class="input-group">
+          <i class="fas fa-user"></i>
+          <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้ (Username)" autocomplete="username">
         </div>
+        <div class="input-group">
+          <i class="fas fa-lock"></i>
+          <input type="password" id="loginPassword" placeholder="รหัสผ่าน (Password)" autocomplete="current-password">
+        </div>
+        <button class="btn-primary btn-large" onclick="handleLogin()">
+          <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
+        </button>
+        <button class="btn-outline btn-large" onclick="handleRegister()">
+          <i class="fas fa-user-plus"></i> ลงทะเบียนผู้ใช้ใหม่
+        </button>
+      </div>
+      <p class="login-note">ข้อมูลถูกจัดเก็บในเครื่องของคุณอย่างปลอดภัย</p>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" class="screen">
+    <!-- TAB: HOME -->
+    <div id="tabHome" class="tab-content active">
+      <div class="header header-primary">
+        <div class="header-top">
+          <div>
+            <h1 class="header-title">SeizGuard <span class="header-badge">ชักไม่ซ้ำ</span></h1>
+            <p class="header-date" id="headerDate"></p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-icon btn-icon-light" onclick="showAddMedModal()" title="เพิ่มยา">
+              <i class="fas fa-plus"></i>
+            </button>
+            <button class="btn-icon btn-icon-light" onclick="handleLogout()" title="ออกจากระบบ">
+              <i class="fas fa-sign-out-alt"></i>
+            </button>
+          </div>
+        </div>
+        <div class="week-calendar" id="weekCalendar"></div>
+      </div>
+      <div class="content-scroll">
+        <div class="adherence-card" id="adherenceCard"></div>
+        <div class="section-header">
+          <i class="fas fa-pills"></i>
+          <span id="medSectionTitle">ยาวันนี้</span>
+        </div>
+        <div id="medList"></div>
+        <button class="missed-dose-btn" onclick="showTab('missedDose')">
+          <i class="fas fa-question-circle"></i>
+          <span>ลืมกินยา? ดูคำแนะนำ</span>
+          <i class="fas fa-chevron-right"></i>
+        </button>
+      </div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- TAB: LEARN -->
+    <div id="tabLearn" class="tab-content">
+      <div class="header header-primary">
+        <h1 class="header-title">สุขศึกษา</h1>
+        <p class="header-sub">ความรู้ที่ผู้ป่วยและผู้ดูแลควรทราบ</p>
+      </div>
+      <div class="content-scroll" id="learnTopicsList"></div>
+    </div>
+
+    <!-- TAB: ASSESS -->
+    <div id="tabAssess" class="tab-content">
+      <div class="header header-primary">
+        <h1 class="header-title">ประเมินอาการ</h1>
+        <p class="header-sub">บันทึกอาการชักและผลข้างเคียง</p>
+      </div>
+      <div class="content-scroll">
+        <div class="actions-row">
+          <button class="action-card action-danger" onclick="showModal('seizureModal')">
+            <div class="action-icon bg-danger"><i class="fas fa-bolt"></i></div>
+            <strong>บันทึกอาการชัก</strong>
+            <small>บันทึกรายละเอียด วัน เวลา อาการ</small>
+          </button>
+          <button class="action-card action-warning" onclick="showModal('sideEffectModal')">
+            <div class="action-icon bg-warning"><i class="fas fa-exclamation-triangle"></i></div>
+            <strong>ผลข้างเคียงยา</strong>
+            <small>บันทึกอาการไม่พึงประสงค์</small>
+          </button>
+        </div>
+        <div class="section-header"><i class="fas fa-bolt" style="color:var(--danger)"></i><span>ประวัติอาการชัก</span></div>
+        <div id="seizureLogsList"></div>
+        <div class="section-header" style="margin-top:20px"><i class="fas fa-exclamation-triangle" style="color:var(--warning)"></i><span>ผลข้างเคียงล่าสุด</span></div>
+        <div id="sideEffectLogsList"></div>
+      </div>
+    </div>
+
+    <!-- TAB: PROFILE -->
+    <div id="tabProfile" class="tab-content">
+      <div class="header header-primary">
+        <div class="header-top">
+          <h1 class="header-title">ข้อมูลส่วนบุคคล</h1>
+          <button class="btn-icon btn-icon-light" id="editProfileBtn" onclick="toggleEditProfile()">
+            <i class="fas fa-pen"></i>
+          </button>
+        </div>
+      </div>
+      <div class="content-scroll">
+        <a href="tel:1669" class="emergency-button" id="emergencyCallBtn">
+          <i class="fas fa-phone-alt"></i>
+          <div class="emergency-info">
+            <strong>โทรฉุกเฉิน</strong>
+            <span id="emergencyNumber">1669</span>
+          </div>
+          <i class="fas fa-chevron-right"></i>
+        </a>
+        <div id="profileContent"></div>
+      </div>
+    </div>
+
+    <!-- TAB: MISSED DOSE -->
+    <div id="tabMissedDose" class="tab-content">
+      <div class="header header-white">
+        <button class="btn-icon" onclick="showTab('home')"><i class="fas fa-arrow-left"></i></button>
+        <h2 class="header-title-dark">ลืมกินยากันชัก</h2>
+        <div style="width:40px"></div>
+      </div>
+      <div class="content-scroll" id="missedDoseContent"></div>
+    </div>
+
+    <!-- TAB: LEARN DETAIL -->
+    <div id="tabLearnDetail" class="tab-content">
+      <div class="header header-primary">
+        <button class="btn-icon btn-icon-light" onclick="showTab('learn')"><i class="fas fa-arrow-left"></i></button>
+        <h2 class="header-title" id="learnDetailTitle" style="flex:1;text-align:center"></h2>
+        <div style="width:40px"></div>
+      </div>
+      <div class="content-scroll" id="learnDetailContent"></div>
+    </div>
+
+    <!-- TAB: MED DETAIL -->
+    <div id="tabMedDetail" class="tab-content">
+      <div class="header header-primary">
+        <button class="btn-icon btn-icon-light" onclick="showTab('home')"><i class="fas fa-arrow-left"></i></button>
+        <h2 class="header-title" id="medDetailTitle" style="flex:1;text-align:center"></h2>
+        <button class="btn-icon btn-icon-light" id="deleteMedBtn"><i class="fas fa-trash"></i></button>
+      </div>
+      <div class="content-scroll" id="medDetailContent"></div>
+    </div>
+
+    <!-- BOTTOM TAB BAR -->
+    <nav class="tab-bar">
+      <button class="tab-item active" onclick="showTab('home')" id="tabBtnHome">
+        <i class="fas fa-pills"></i>
+        <span>หน้าหลัก</span>
+      </button>
+      <button class="tab-item" onclick="showTab('learn')" id="tabBtnLearn">
+        <i class="fas fa-book-medical"></i>
+        <span>สุขศึกษา</span>
+      </button>
+      <button class="tab-item" onclick="showTab('assess')" id="tabBtnAssess">
+        <i class="fas fa-clipboard-list"></i>
+        <span>ประเมิน</span>
+      </button>
+      <button class="tab-item" onclick="showTab('profile')" id="tabBtnProfile">
+        <i class="fas fa-user-circle"></i>
+        <span>ข้อมูลส่วนบุคคล</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- MODAL: ADD MEDICATION -->
+  <div id="addMedModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="btn-icon" onclick="closeModal('addMedModal')"><i class="fas fa-times"></i></button>
+        <h3>เพิ่มรายการยา</h3>
+        <button class="btn-icon btn-save" onclick="saveNewMedication()"><i class="fas fa-check"></i></button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">ชื่อยา</label>
+        <input type="text" id="medName" class="field-input" placeholder="เช่น Phenytoin, Levetiracetam">
+        <div class="common-meds" id="commonMedsList"></div>
+        <label class="field-label">ขนาดยา</label>
+        <input type="text" id="medDosage" class="field-input" placeholder="เช่น 100mg, 500mg">
+        <label class="field-label">เวลากินยา</label>
+        <div class="time-options" id="timeOptions"></div>
+        <label class="field-label">จำนวนเม็ดยาที่ได้รับ (ทั้งหมด)</label>
+        <input type="number" id="medPillCount" class="field-input" placeholder="เช่น 30, 60">
+        <label class="field-label">หมายเหตุ</label>
+        <textarea id="medNotes" class="field-input field-textarea" placeholder="รายละเอียดเพิ่มเติม (ไม่บังคับ)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LOG SEIZURE -->
+  <div id="seizureModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="btn-icon" onclick="closeModal('seizureModal')"><i class="fas fa-times"></i></button>
+        <h3>บันทึกอาการชัก</h3>
+        <button class="btn-icon btn-save" onclick="saveSeizureLog()"><i class="fas fa-check"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="date-time-row">
+          <div class="dt-item"><i class="fas fa-calendar"></i><span id="seizureDate"></span></div>
+          <div class="dt-item"><i class="fas fa-clock"></i><span id="seizureTime"></span></div>
+        </div>
+        <label class="field-label">ระยะเวลา</label>
+        <input type="text" id="seizureDuration" class="field-input" placeholder="เช่น 2 นาที, 30 วินาที">
+        <label class="field-label">ความรุนแรง</label>
+        <div class="severity-picker" id="seizureSeverity"></div>
+        <div class="severity-desc" id="seizureSeverityDesc"></div>
+        <label class="field-label">อาการ (เลือกได้หลายข้อ)</label>
+        <div class="chip-grid" id="seizureSymptoms"></div>
+        <label class="field-label">หมายเหตุ</label>
+        <textarea id="seizureNotes" class="field-input field-textarea" placeholder="รายละเอียดเพิ่มเติม เช่น สิ่งที่ทำก่อนเกิดอาการ"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LOG SIDE EFFECT -->
+  <div id="sideEffectModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button class="btn-icon" onclick="closeModal('sideEffectModal')"><i class="fas fa-times"></i></button>
+        <h3>บันทึกผลข้างเคียง</h3>
+        <button class="btn-icon btn-save" onclick="saveSideEffectLog()"><i class="fas fa-check"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="date-time-row">
+          <div class="dt-item"><i class="fas fa-calendar"></i><span id="sideEffectDate"></span></div>
+        </div>
+        <label class="field-label">ยาที่สงสัย</label>
+        <div class="chip-grid" id="sideEffectMeds"></div>
+        <label class="field-label">ความรุนแรง</label>
+        <div class="severity-picker" id="sideEffectSeverity"></div>
+        <div class="severity-desc" id="sideEffectSeverityDesc"></div>
+        <label class="field-label">อาการข้างเคียง (เลือกได้หลายข้อ)</label>
+        <div class="chip-grid" id="sideEffectSymptoms"></div>
+        <label class="field-label">หมายเหตุ</label>
+        <textarea id="sideEffectNotes" class="field-input field-textarea" placeholder="รายละเอียดเพิ่มเติม"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="script.js"></script>
 </body>
 </html>
