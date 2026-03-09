@@ -1,3 +1,5 @@
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_SGSO86onWlLGPzVFtY0X3UnTe2lIIgzleKq-p7d-mXQVCEHHL5BrcnDCYKeGlfB-/exec';
+/* ===== SeizGuard - ชักไม่ซ้ำ ===== */
 
 const COMMON_AEDS = [
   { name: 'Phenytoin', thai: 'เฟนิโทอิน' },
@@ -250,9 +252,6 @@ let editingProfile = false;
 let missedDoseStep = 'frequency';
 let missedDoseFreq = 0;
 
-// ===== GOOGLE SHEETS INTEGRATION =====
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_SGSO86onWlLGPzVFtY0X3UnTe2lIIgzleKq-p7d-mXQVCEHHL5BrcnDCYKeGlfB-/exec';
-
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,9); }
 function getDateStr(d) { return d.toISOString().split('T')[0]; }
 function getTimeStr() { const n=new Date(); return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0'); }
@@ -276,11 +275,29 @@ function handleLogin() {
   const hn = document.getElementById('loginHN').value.trim();
   if (!u || !hn) { showToast('กรุณากรอกชื่อผู้ใช้ และเลขที่โรงพยาบาล'); return; }
   const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
-  if (!users[u]) { showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน'); return; }
-  if (users[u].hn !== hn) { showToast('เลขที่โรงพยาบาลไม่ถูกต้อง'); return; }
-  currentUser = u;
-  localStorage.setItem('seizguard_currentUser', u);
-  enterApp();
+  
+  if (users[u] && users[u].hn === hn) {
+    currentUser = u;
+    localStorage.setItem('seizguard_currentUser', u);
+    enterApp();
+    return;
+  }
+  
+  showToast('กำลังตรวจสอบข้อมูล...');
+  fetch(`${SCRIPT_URL}?action=checkUser&username=${encodeURIComponent(u)}&hn=${encodeURIComponent(hn)}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.exists) {
+        users[u] = { hn: hn };
+        localStorage.setItem('seizguard_users', JSON.stringify(users));
+        currentUser = u;
+        localStorage.setItem('seizguard_currentUser', u);
+        enterApp();
+      } else {
+        showToast('ไม่พบผู้ใช้นี้ หรือข้อมูลไม่ถูกต้อง');
+      }
+    })
+    .catch(() => showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน'));
 }
 
 function handleRegister() {
@@ -291,26 +308,20 @@ function handleRegister() {
   if (hn.length < 1) { showToast('กรุณากรอกเลขที่โรงพยาบาล'); return; }
   const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
   if (users[u]) { showToast('ชื่อผู้ใช้นี้ถูกใช้แล้ว'); return; }
+  
   users[u] = { hn: hn };
   localStorage.setItem('seizguard_users', JSON.stringify(users));
-  // ส่งข้อมูลผู้ใช้ใหม่ไปยัง Google Sheets
-  sendUserToSheet(u, hn);
+  
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify({ action: 'registerUser', username: u, hn: hn, timestamp: new Date().toISOString() })
+  });
+
   currentUser = u;
   localStorage.setItem('seizguard_currentUser', u);
   showToast('ลงทะเบียนสำเร็จ!');
   enterApp();
-}
-
-function sendUserToSheet(username, hn) {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'registerUser',
-      username: username,
-      hn: hn,
-      timestamp: new Date().toISOString()
-    })
-  }).catch(err => console.error('Error registering user:', err));
 }
 
 function handleLogout() {
@@ -400,6 +411,9 @@ function generateDailyLogs() {
     });
   });
   setData('medLogs', logs);
+    const med = getData('medications').find(m => m.id === logs[idx].medicationId);
+    const profile = getObj('profile') || {};
+    fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logMedication', username: currentUser, hn: profile.hn || '', medName: med ? med.name : 'Unknown', date: logs[idx].date, scheduledTime: logs[idx].scheduledTime, takenTime: logs[idx].takenTime, timestamp: new Date().toISOString() }) });
 }
 
 function renderAdherence() {
@@ -412,7 +426,7 @@ function renderAdherence() {
   const pct = total>0 ? Math.round(taken/total*100) : 0;
 
   document.getElementById('adherenceCard').innerHTML = `
-    <div class="adherence-header"><i class="fas fa-chart-bar"></i><span>Adherence 7 วัน</span></div>
+    <div class="adherence-header"><i class="fas fa-chart-bar"></i><span>Adherence 7 วัน</span><button class="delete-btn" onclick="deleteSeizureLog('${l.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;float:right;"><i class="fas fa-times"></i></button></div>
     <div class="adherence-bar"><div class="adherence-fill" style="width:${pct}%"></div></div>
     <div class="adherence-text">${taken}/${total} (${pct}%)</div>`;
 }
@@ -485,31 +499,12 @@ function takePill(logId) {
     logs[idx].status = 'taken';
     logs[idx].takenTime = getTimeStr();
     setData('medLogs', logs);
-    
-    // ส่งข้อมูลไปยัง Google Sheets
     const med = getData('medications').find(m => m.id === logs[idx].medicationId);
     const profile = getObj('profile') || {};
-    sendMedicationLog(currentUser, profile.hn || '', med.name, logs[idx].date, logs[idx].scheduledTime, logs[idx].takenTime);
-    
+    fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logMedication', username: currentUser, hn: profile.hn || '', medName: med ? med.name : 'Unknown', date: logs[idx].date, scheduledTime: logs[idx].scheduledTime, takenTime: logs[idx].takenTime, timestamp: new Date().toISOString() }) });
     renderHome();
     showToast('บันทึกการกินยาแล้ว');
   }
-}
-
-function sendMedicationLog(username, hn, medName, date, scheduledTime, takenTime) {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'logMedication',
-      username: username,
-      hn: hn,
-      medName: medName,
-      date: date,
-      scheduledTime: scheduledTime,
-      takenTime: takenTime,
-      timestamp: new Date().toISOString()
-    })
-  }).catch(err => console.error('Error logging medication:', err));
 }
 
 /* ===== ADD MEDICATION MODAL ===== */
@@ -608,25 +603,34 @@ function showMedDetail(medId) {
       </div>
       <div class="adherence-bar"><div class="adherence-fill" style="width:${adherencePct}%"></div></div>
     </div>
-    ${med.notes ? `<div class="detail-card"><h4>หมายเหตุ</h4><p>${med.notes}</p></div>` : ''}
-  `;
+    <div class="detail-card">
+      <h4>ประวัติล่าสุด</h4>
+      ${allLogs.length===0?'<p style="text-align:center;color:var(--text3);padding:20px">ยังไม่มีประวัติ</p>':''}
+      ${allLogs.slice(0,7).map(l => {
+        const c = l.status==='taken'?'var(--success)':l.status==='missed'?'var(--danger)':'var(--warning)';
+        const s = l.status==='taken'?'กินแล้ว':l.status==='missed'?'ขาด':'รอ';
+        return `<div class="log-row"><div class="log-dot" style="background:${c}"></div><div class="log-row-date">${l.date}</div><div class="log-row-time">${l.scheduledTime}</div><div class="log-row-status" style="color:${c}">${s}</div></div>`;
+      }).join('')}
+    </div>
+    ${med.notes?`<div class="detail-card"><h4>หมายเหตุ</h4><p style="font-size:14px;color:var(--text2);line-height:1.6">${med.notes}</p></div>`:''}`;
+
   showTab('medDetail');
 }
 
 /* ===== LEARN ===== */
 const LEARN_TOPICS = [
-  { id:'what-is-seizure', title:'อาการชักคืออะไร', sub:'เข้าใจเกี่ยวกับอาการชักและโรคลมชัก', icon:'fa-brain', bg:'#E3F2FD', color:'#1976D2' },
-  { id:'why-aeds', title:'ทำไมต้องกินยากันชัก', sub:'เหตุผลและประโยชน์ของการใช้ยา', icon:'fa-pills', bg:'#F3E5F5', color:'#7B1FA2' },
-  { id:'tbi-criteria', title:'เกณฑ์การให้ยาหลัง Head Injury', sub:'ข้อบ่งชี้และเกณฑ์ความเสี่ยง', icon:'fa-heartbeat', bg:'#FCE4EC', color:'#C2185B' },
-  { id:'side-effects', title:'ผลข้างเคียงยากันชัก', sub:'ผลข้างเคียงทั่วไปและเฉพาะของยา', icon:'fa-exclamation-triangle', bg:'#FFF3E0', color:'#F57C00' },
-  { id:'missed-dose-guide', title:'ถ้าลืมกินยากันชักควรทำอย่างไร', sub:'คำแนะนำการจัดการเมื่อลืมกินยา', icon:'fa-clock', bg:'#E0F2F1', color:'#00796B' },
-  { id:'seizure-first-aid', title:'การปฐมพยาบาลเมื่อมีอาการชัก', sub:'สิ่งที่ควรและไม่ควรทำ', icon:'fa-first-aid', bg:'#E8F5E9', color:'#388E3C' },
-  { id:'self-observation', title:'การสังเกตอาการตนเอง', sub:'บันทึกอาการและปัจจัยกระตุ้น', icon:'fa-clipboard', bg:'#F1F8E9', color:'#689F38' },
-  { id:'research-evidence', title:'หลักฐานเชิงประจักษ์และงานวิจัย', sub:'ข้อมูลจากการศึกษาทางวิทยาศาสตร์', icon:'fa-flask', bg:'#EDE7F6', color:'#512DA8' },
+  { id:'what-is-seizure', icon:'fa-bolt', color:'var(--accent)', bg:'var(--accent-soft)', title:'อาการชักคืออะไร', sub:'ความรู้พื้นฐาน, ชนิดของอาการชัก, สาเหตุ' },
+  { id:'why-aeds', icon:'fa-pills', color:'var(--primary)', bg:'#E0F4F4', title:'ทำไมต้องกินยากันชัก', sub:'เหตุผล, ประโยชน์, กลุ่มผู้ป่วยที่ต้องใช้ยา' },
+  { id:'tbi-criteria', icon:'fa-shield-halved', color:'#6366F1', bg:'#EEF2FF', title:'เกณฑ์การให้ยาหลัง Head Injury', sub:'Criteria, งานวิจัย, แนวทางปฏิบัติ' },
+  { id:'side-effects', icon:'fa-exclamation-triangle', color:'var(--warning)', bg:'var(--warning-light)', title:'ผลข้างเคียงยากันชัก', sub:'อาการที่ควรสังเกต, เมื่อไหร่ควรพบแพทย์' },
+  { id:'missed-dose-guide', icon:'fa-circle-question', color:'#EC4899', bg:'#FDF2F8', title:'ถ้าลืมกินยากันชักควรทำอย่างไร', sub:'คำแนะนำเมื่อลืมกินยา, หลักปฏิบัติ' },
+  { id:'seizure-first-aid', icon:'fa-heart-pulse', color:'var(--danger)', bg:'var(--danger-light)', title:'การปฐมพยาบาลเมื่อมีอาการชัก', sub:'สิ่งที่ควรทำ/ไม่ควรทำ สำหรับผู้ดูแล' },
+  { id:'self-observation', icon:'fa-eye', color:'#0EA5E9', bg:'#F0F9FF', title:'การสังเกตอาการตนเอง', sub:'สัญญาณเตือนก่อนชัก, การบันทึกอาการ' },
+  { id:'research-evidence', icon:'fa-file-lines', color:'#8B5CF6', bg:'#F5F3FF', title:'หลักฐานเชิงประจักษ์และงานวิจัย', sub:'Systematic reviews, Practice guidelines' },
 ];
 
 function renderLearnTopics() {
-  document.getElementById('learnTopics').innerHTML = LEARN_TOPICS.map(t =>
+  document.getElementById('learnTopicsList').innerHTML = LEARN_TOPICS.map(t =>
     `<div class="topic-card" onclick="showLearnDetail('${t.id}')">
       <div class="topic-icon" style="background:${t.bg};color:${t.color}"><i class="fas ${t.icon}"></i></div>
       <div class="topic-info"><div class="topic-title">${t.title}</div><div class="topic-sub">${t.sub}</div></div>
@@ -714,25 +718,14 @@ function renderSeizureLogs() {
     const sev = SEVERITY_DESCRIPTIONS[l.severity];
     return `<div class="log-card">
       <div class="log-header">
-        <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span><span style="color:var(--text2)">${l.time}</span></div>
+        <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span><span style="color:var(--text2)">${l.time}</span><button class="delete-btn" onclick="deleteSeizureLog('${l.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;float:right;"><i class="fas fa-times"></i></button></div>
         <span class="severity-badge" style="background:${sev.color}20;color:${sev.color}">${sev.label}</span>
-        <button class="delete-btn" onclick="deleteSeizureLog('${l.id}')" title="ลบ"><i class="fas fa-times"></i></button>
       </div>
       ${l.duration ? `<div class="log-detail">ระยะเวลา: ${l.duration}</div>` : ''}
       ${l.symptoms.length>0 ? `<div class="tags-row">${l.symptoms.map(s=>`<span class="tag">${s}</span>`).join('')}</div>` : ''}
       ${l.notes ? `<div class="log-notes">${l.notes}</div>` : ''}
     </div>`;
   }).join('');
-}
-
-function deleteSeizureLog(logId) {
-  if (confirm('ต้องการลบบันทึกนี้หรือไม่?')) {
-    let logs = getData('seizureLogs');
-    logs = logs.filter(l => l.id !== logId);
-    setData('seizureLogs', logs);
-    renderAssess();
-    showToast('ลบบันทึกแล้ว');
-  }
 }
 
 function renderSideEffectLogs() {
@@ -751,22 +744,11 @@ function renderSideEffectLogs() {
       <div class="log-header">
         <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span>${medName ? `<span style="font-size:11px;color:var(--primary);margin-left:6px"><i class="fas fa-pills"></i> ${medName}</span>` : ''}</div>
         <span class="severity-badge" style="background:${sev.color}20;color:${sev.color}">${sev.label}</span>
-        <button class="delete-btn" onclick="deleteSideEffectLog('${l.id}')" title="ลบ"><i class="fas fa-times"></i></button>
       </div>
       <div class="tags-row">${l.effects.map(e=>`<span class="tag">${e}</span>`).join('')}</div>
       ${l.notes ? `<div class="log-notes">${l.notes}</div>` : ''}
     </div>`;
   }).join('');
-}
-
-function deleteSideEffectLog(logId) {
-  if (confirm('ต้องการลบบันทึกนี้หรือไม่?')) {
-    let logs = getData('sideEffectLogs');
-    logs = logs.filter(l => l.id !== logId);
-    setData('sideEffectLogs', logs);
-    renderAssess();
-    showToast('ลบบันทึกแล้ว');
-  }
 }
 
 /* ===== SEIZURE MODAL ===== */
@@ -851,32 +833,11 @@ function saveSeizureLog() {
   const logs = getData('seizureLogs');
   logs.push(log);
   setData('seizureLogs', logs);
-  
-  // ส่งข้อมูลไปยัง Google Sheets
   const profile = getObj('profile') || {};
-  sendSeizureLog(currentUser, profile.hn || '', log);
-  
+  fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logSeizure', username: currentUser, hn: profile.hn || '', date: log.date, time: log.time, duration: log.duration, severity: log.severity, symptoms: log.symptoms.join(', '), notes: log.notes, timestamp: new Date().toISOString() }) });
   closeModal('seizureModal');
   renderAssess();
   showToast('บันทึกอาการชักแล้ว');
-}
-
-function sendSeizureLog(username, hn, log) {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'logSeizure',
-      username: username,
-      hn: hn,
-      date: log.date,
-      time: log.time,
-      duration: log.duration,
-      severity: log.severity,
-      symptoms: log.symptoms.join(', '),
-      notes: log.notes,
-      timestamp: new Date().toISOString()
-    })
-  }).catch(err => console.error('Error logging seizure:', err));
 }
 
 /* ===== SIDE EFFECT MODAL ===== */
@@ -1003,32 +964,12 @@ function saveSideEffectLog() {
   const logs = getData('sideEffectLogs');
   logs.push(log);
   setData('sideEffectLogs', logs);
-  
-  // ส่งข้อมูลไปยัง Google Sheets
   const profile = getObj('profile') || {};
-  const med = getData('medications').find(m => m.id === selectedSideEffectMedId);
-  sendSideEffectLog(currentUser, profile.hn || '', med ? med.name : '', log);
-  
+  const med = getData('medications').find(m => m.id === log.medicationId);
+  fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logSideEffect', username: currentUser, hn: profile.hn || '', medName: med ? med.name : 'Unknown', date: log.date, effects: log.effects.join(', '), severity: log.severity, notes: log.notes, timestamp: new Date().toISOString() }) });
   closeModal('sideEffectModal');
   renderAssess();
   showToast('บันทึกผลข้างเคียงแล้ว');
-}
-
-function sendSideEffectLog(username, hn, medName, log) {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'logSideEffect',
-      username: username,
-      hn: hn,
-      medName: medName,
-      date: log.date,
-      effects: log.effects.join(', '),
-      severity: log.severity,
-      notes: log.notes,
-      timestamp: new Date().toISOString()
-    })
-  }).catch(err => console.error('Error logging side effect:', err));
 }
 
 /* ===== SEVERITY PICKER ===== */
@@ -1062,6 +1003,14 @@ function toggleArr(arr, item) {
 }
 
 /* ===== PROFILE ===== */
+function deleteSeizureLog(id) { if (confirm('ต้องการลบบันทึกอาการชักนี้หรือไม่?')) { let logs = getData('seizureLogs'); logs = logs.filter(l => l.id !== id); setData('seizureLogs', logs);
+  const profile = getObj('profile') || {};
+  fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logSeizure', username: currentUser, hn: profile.hn || '', date: log.date, time: log.time, duration: log.duration, severity: log.severity, symptoms: log.symptoms.join(', '), notes: log.notes, timestamp: new Date().toISOString() }) }); renderAssess(); showToast('ลบบันทึกแล้ว'); } }
+function deleteSideEffectLog(id) { if (confirm('ต้องการลบบันทึกผลข้างเคียงนี้หรือไม่?')) { let logs = getData('sideEffectLogs'); logs = logs.filter(l => l.id !== id); setData('sideEffectLogs', logs);
+  const profile = getObj('profile') || {};
+  const med = getData('medications').find(m => m.id === log.medicationId);
+  fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'logSideEffect', username: currentUser, hn: profile.hn || '', medName: med ? med.name : 'Unknown', date: log.date, effects: log.effects.join(', '), severity: log.severity, notes: log.notes, timestamp: new Date().toISOString() }) }); renderAssess(); showToast('ลบบันทึกแล้ว'); } }
+
 function renderProfile() {
   const profile = getObj('profile') || { name:'', hn:'', age:'', diagnosis:'', emergencyContact:'', emergencyPhone:'', doctorName:'', doctorPhone:'', nextAppointment:'' };
   const phone = profile.emergencyPhone || '1669';
@@ -1091,7 +1040,7 @@ function renderProfile() {
 
   document.getElementById('profileContent').innerHTML = fields.map(section =>
     `<div class="profile-section">
-      <div class="profile-section-header"><i class="fas ${section.icon}" style="color:${section.color}"></i><span>${section.section}</span></div>
+      <div class="profile-section-header"><i class="fas ${section.icon}" style="color:${section.color}"></i><span>${section.section}</span><button class="delete-btn" onclick="deleteSeizureLog('${l.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;float:right;"><i class="fas fa-times"></i></button></div>
       <div class="profile-card">
         ${section.rows.map(r => `<div class="profile-row">
           <span class="profile-label">${r.label}</span>
@@ -1108,7 +1057,7 @@ function renderProfile() {
 function toggleEditProfile() {
   if (editingProfile) {
     const profile = {};
-    ['name','hn','age','diagnosis','emergencyContact','emergencyPhone','doctorName','doctorPhone','nextAppointment'].forEach(k => {
+    ['name','age','diagnosis','emergencyContact','emergencyPhone','doctorName','doctorPhone','nextAppointment'].forEach(k => {
       const el = document.getElementById('pf_' + k);
       profile[k] = el ? el.value.trim() : '';
     });
@@ -1149,7 +1098,7 @@ function renderMissedDoseContent() {
 
   container.innerHTML = `
     <div class="advisor-card">
-      <div class="advisor-header"><i class="fas fa-lightbulb"></i><span>ระบบช่วยแนะนำ</span></div>
+      <div class="advisor-header"><i class="fas fa-lightbulb"></i><span>ระบบช่วยแนะนำ</span><button class="delete-btn" onclick="deleteSeizureLog('${l.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px;float:right;"><i class="fas fa-times"></i></button></div>
       ${advisorHtml}
     </div>
     <h3 style="font-size:17px;font-weight:600;margin-bottom:14px">หลักปฏิบัติเมื่อลืมกินยากันชัก</h3>
@@ -1211,4 +1160,113 @@ document.querySelectorAll('.modal').forEach(modal => {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');
   });
+});
+
+
+/* ===== GOOGLE SHEET INTEGRATION ===== */
+// Google Form URL
+const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAukHlHfPDMztqyVgnmEBBhFB3doYNVfkziA9r6Z4gHPbGyA/formResponse';
+
+// ฟิลด์ ID ของ Google Form
+const FORM_FIELDS = {
+  username: 'entry.607237854',
+  hn: 'entry.1510434627',
+  date: 'entry.1957480164',
+  medName: 'entry.279375545',
+  status: 'entry.1642115361',
+  actualTime: 'entry.1324849634',
+  seizure: 'entry.1692092125',
+  seizureSeverity: 'entry.219841705',
+  sideEffect: 'entry.341674460',
+  sideEffectType: 'entry.273226191',
+  sideEffectSeverity: 'entry.294989148'
+};
+
+// ฟังก์ชันสำหรับส่งข้อมูลไปยัง Google Sheet
+function submitToGoogleSheet() {
+  const username = currentUser;
+  const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
+  const hn = users[username]?.hn || '';
+  
+  const meds = getData('medications');
+  const medLogs = getData('medLogs');
+  const seizures = getData('seizures');
+  const sideEffects = getData('sideEffects');
+  
+  if (meds.length === 0 && medLogs.length === 0 && seizures.length === 0 && sideEffects.length === 0) {
+    showToast('ไม่มีข้อมูลที่จะส่ง');
+    return;
+  }
+  
+  let submittedCount = 0;
+  
+  // ส่งข้อมูลการกินยา
+  medLogs.forEach((log) => {
+    const med = meds.find(m => m.id === log.medicationId);
+    if (med) {
+      const formData = new FormData();
+      formData.append(FORM_FIELDS.username, username);
+      formData.append(FORM_FIELDS.hn, hn);
+      formData.append(FORM_FIELDS.date, log.date);
+      formData.append(FORM_FIELDS.medName, med.name);
+      formData.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
+      
+      if (log.actualTime) {
+        formData.append(FORM_FIELDS.actualTime, log.actualTime);
+      }
+      
+      // ส่งข้อมูลการชัก
+      const seizure = seizures.find(s => s.date === log.date);
+      if (seizure) {
+        formData.append(FORM_FIELDS.seizure, 'มี');
+        formData.append(FORM_FIELDS.seizureSeverity, seizure.severity || '');
+      } else {
+        formData.append(FORM_FIELDS.seizure, 'ไม่มี');
+      }
+      
+      // ส่งข้อมูลผลข้างเคียง
+      const sideEffect = sideEffects.find(s => s.date === log.date);
+      if (sideEffect) {
+        formData.append(FORM_FIELDS.sideEffect, 'มี');
+        formData.append(FORM_FIELDS.sideEffectType, sideEffect.symptoms?.join(', ') || '');
+        formData.append(FORM_FIELDS.sideEffectSeverity, sideEffect.severity || '');
+      } else {
+        formData.append(FORM_FIELDS.sideEffect, 'ไม่มี');
+      }
+      
+      // ส่งข้อมูลไปยัง Google Form
+      fetch(GOOGLE_FORM_URL, {
+        method: 'POST',
+        body: formData,
+        mode: 'no-cors'
+      }).then(() => {
+        submittedCount++;
+      }).catch(err => {
+        console.error('Error:', err);
+      });
+    }
+  });
+  
+  setTimeout(() => {
+    showToast(`ส่งข้อมูล ${submittedCount} รายการไปยัง Google Sheet สำเร็จ!`);
+  }, 500);
+}
+
+// เพิ่มปุ่มส่งข้อมูลในหน้า Profile
+function addGoogleSheetButton() {
+  const profileContent = document.getElementById('tabProfile');
+  if (profileContent && !document.getElementById('submitGoogleSheetBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'submitGoogleSheetBtn';
+    btn.className = 'btn-primary btn-large';
+    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> ส่งข้อมูลไปยัง Google Sheet';
+    btn.onclick = submitToGoogleSheet;
+    btn.style.marginTop = '20px';
+    profileContent.appendChild(btn);
+  }
+}
+
+// เรียกใช้เมื่อเข้าแอป
+window.addEventListener('load', () => {
+  setTimeout(addGoogleSheetButton, 500);
 });
