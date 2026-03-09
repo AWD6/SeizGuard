@@ -1118,22 +1118,22 @@ document.querySelectorAll('.modal').forEach(modal => {
 
 
 /* ===== GOOGLE SHEET INTEGRATION ===== */
-// Google Form URL - แทนที่ด้วย URL ของ Google Form ของคุณ
+// Google Form URL
 const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAukHlHfPDMztqyVgnmEBBhFB3doYNVfkziA9r6Z4gHPbGyA/formResponse';
 
 // ฟิลด์ ID ของ Google Form
 const FORM_FIELDS = {
-  username: 'entry.607237854',       // Username
-  hn: 'entry.1510434627',            // Hospital Number (HN)
-  date: 'entry.1957480164',          // วันที่บันทึก
-  medName: 'entry.279375545',        // ชื่อยา (Medication Name)
-  status: 'entry.1642115361',        // สถานะการกินยา (Status)
-  actualTime: 'entry.1324849634',    // เวลาที่กินจริง (Actual Time Taken)
-  seizure: 'entry.1692092125',       // มีอาการชัก
-  seizureSeverity: 'entry.219841705', // ความรุนแรงของอาการชัก
-  sideEffect: 'entry.341674460',     // มีผลข้างเคียง
-  sideEffectType: 'entry.273226191', // ชนิดของผลข้างเคียง
-  sideEffectSeverity: 'entry.294989148' // ความรุนแรงของผลข้างเคียง
+  username: 'entry.607237854',
+  hn: 'entry.1510434627',
+  date: 'entry.1957480164',
+  medName: 'entry.279375545',
+  status: 'entry.1642115361',
+  actualTime: 'entry.1324849634',
+  seizure: 'entry.1692092125',
+  seizureSeverity: 'entry.219841705',
+  sideEffect: 'entry.341674460',
+  sideEffectType: 'entry.273226191',
+  sideEffectSeverity: 'entry.294989148'
 };
 
 // ฟังก์ชันสำหรับส่งข้อมูลไปยัง Google Sheet
@@ -1152,52 +1152,58 @@ function submitToGoogleSheet() {
     return;
   }
   
-  // สร้าง FormData สำหรับส่ง
-  const formData = new FormData();
-  formData.append(FORM_FIELDS.username, username);
-  formData.append(FORM_FIELDS.hn, hn);
-  formData.append(FORM_FIELDS.date, getDateStr(new Date()));
+  let submittedCount = 0;
   
   // ส่งข้อมูลการกินยา
-  medLogs.forEach((log, index) => {
+  medLogs.forEach((log) => {
     const med = meds.find(m => m.id === log.medicationId);
     if (med) {
-      const formDataCopy = new FormData(formData);
-      formDataCopy.append(FORM_FIELDS.medName, med.name);
-      formDataCopy.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
+      const formData = new FormData();
+      formData.append(FORM_FIELDS.username, username);
+      formData.append(FORM_FIELDS.hn, hn);
+      formData.append(FORM_FIELDS.date, log.date);
+      formData.append(FORM_FIELDS.medName, med.name);
+      formData.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
+      
+      if (log.actualTime) {
+        formData.append(FORM_FIELDS.actualTime, log.actualTime);
+      }
       
       // ส่งข้อมูลการชัก
       const seizure = seizures.find(s => s.date === log.date);
       if (seizure) {
-        formDataCopy.append(FORM_FIELDS.seizure, 'มี');
-        formDataCopy.append(FORM_FIELDS.seizureSeverity, seizure.severity || '');
+        formData.append(FORM_FIELDS.seizure, 'มี');
+        formData.append(FORM_FIELDS.seizureSeverity, seizure.severity || '');
       } else {
-        formDataCopy.append(FORM_FIELDS.seizure, 'ไม่มี');
+        formData.append(FORM_FIELDS.seizure, 'ไม่มี');
       }
       
       // ส่งข้อมูลผลข้างเคียง
       const sideEffect = sideEffects.find(s => s.date === log.date);
       if (sideEffect) {
-        formDataCopy.append(FORM_FIELDS.sideEffect, 'มี');
-        formDataCopy.append(FORM_FIELDS.sideEffectType, sideEffect.symptoms?.join(', ') || '');
-        formDataCopy.append(FORM_FIELDS.sideEffectSeverity, sideEffect.severity || '');
+        formData.append(FORM_FIELDS.sideEffect, 'มี');
+        formData.append(FORM_FIELDS.sideEffectType, sideEffect.symptoms?.join(', ') || '');
+        formData.append(FORM_FIELDS.sideEffectSeverity, sideEffect.severity || '');
       } else {
-        formDataCopy.append(FORM_FIELDS.sideEffect, 'ไม่มี');
+        formData.append(FORM_FIELDS.sideEffect, 'ไม่มี');
       }
       
       // ส่งข้อมูลไปยัง Google Form
       fetch(GOOGLE_FORM_URL, {
         method: 'POST',
-        body: formDataCopy,
+        body: formData,
         mode: 'no-cors'
       }).then(() => {
-        showToast('ส่งข้อมูลไปยัง Google Sheet สำเร็จ!');
+        submittedCount++;
       }).catch(err => {
         console.error('Error:', err);
-        showToast('เกิดข้อผิดพลาดในการส่งข้อมูล');
       });
     }
   });
+  
+  setTimeout(() => {
+    showToast(`ส่งข้อมูล ${submittedCount} รายการไปยัง Google Sheet สำเร็จ!`);
+  }, 500);
 }
 
 // เพิ่มปุ่มส่งข้อมูลในหน้า Profile
