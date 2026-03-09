@@ -271,11 +271,11 @@ function showToast(msg) {
 /* ===== AUTH ===== */
 function handleLogin() {
   const u = document.getElementById('loginUsername').value.trim();
-  const p = document.getElementById('loginPassword').value.trim();
-  if (!u || !p) { showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+  const hn = document.getElementById('loginHN').value.trim();
+  if (!u || !hn) { showToast('กรุณากรอกชื่อผู้ใช้ และเลขที่โรงพยาบาล'); return; }
   const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
   if (!users[u]) { showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน'); return; }
-  if (users[u] !== p) { showToast('รหัสผ่านไม่ถูกต้อง'); return; }
+  if (users[u].hn !== hn) { showToast('เลขที่โรงพยาบาลไม่ถูกต้อง'); return; }
   currentUser = u;
   localStorage.setItem('seizguard_currentUser', u);
   enterApp();
@@ -283,13 +283,13 @@ function handleLogin() {
 
 function handleRegister() {
   const u = document.getElementById('loginUsername').value.trim();
-  const p = document.getElementById('loginPassword').value.trim();
-  if (!u || !p) { showToast('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+  const hn = document.getElementById('loginHN').value.trim();
+  if (!u || !hn) { showToast('กรุณากรอกชื่อผู้ใช้ และเลขที่โรงพยาบาล'); return; }
   if (u.length < 3) { showToast('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร'); return; }
-  if (p.length < 4) { showToast('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร'); return; }
+  if (hn.length < 1) { showToast('กรุณากรอกเลขที่โรงพยาบาล'); return; }
   const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
   if (users[u]) { showToast('ชื่อผู้ใช้นี้ถูกใช้แล้ว'); return; }
-  users[u] = p;
+  users[u] = { hn: hn };
   localStorage.setItem('seizguard_users', JSON.stringify(users));
   currentUser = u;
   localStorage.setItem('seizguard_currentUser', u);
@@ -303,7 +303,7 @@ function handleLogout() {
   document.getElementById('mainApp').classList.remove('active');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = '';
-  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginHN').value = '';
 }
 
 function enterApp() {
@@ -409,12 +409,12 @@ function renderMedList() {
 
   document.getElementById('medSectionTitle').textContent = isToday ? 'ยาวันนี้' : 'ยาวันที่ ' + selectedDate.getDate();
 
-  if (meds.length === 0) {
+  if (meds.length === 0 || logs.length === 0) {
     document.getElementById('medList').innerHTML = `
       <div class="empty-state">
         <i class="fas fa-pills"></i>
-        <h3>ยังไม่มีรายการยา</h3>
-        <p>กดปุ่ม + เพื่อเพิ่มรายการยากันชัก</p>
+        <h3>${logs.length === 0 ? 'ไม่มีรายการยาในวันนี้' : 'ยังไม่มีรายการยา'}</h3>
+        <p>${logs.length === 0 ? 'ไม่มีการกำหนดยาสำหรับวันนี้' : 'กดปุ่ม + เพื่อเพิ่มรายการยากันชัก'}</p>
       </div>`;
     return;
   }
@@ -424,6 +424,15 @@ function renderMedList() {
     if (!med) return '';
     const isTaken = log.status === 'taken';
     const thaiName = getThaiName(med.name);
+    const canTake = isToday && !isTaken;
+    let buttonHtml = '';
+    if (isTaken) {
+      buttonHtml = `<span class="taken-badge">กินแล้ว</span>`;
+    } else if (canTake) {
+      buttonHtml = `<button class="take-btn" onclick="event.stopPropagation();takePill('${log.id}')"><i class="fas fa-check"></i></button>`;
+    } else {
+      buttonHtml = `<span class="taken-badge" style="background:var(--surface2);color:var(--text3)">-</span>`;
+    }
     return `<div class="med-card ${isTaken?'taken':''}" onclick="showMedDetail('${med.id}')">
       <div class="med-icon ${isTaken?'done':'pending'}">
         <i class="fas ${isTaken?'fa-check-circle':'fa-clock'}"></i>
@@ -437,10 +446,7 @@ function renderMedList() {
           ${log.takenTime ? `<span class="taken-time">(กินเมื่อ ${log.takenTime})</span>` : ''}
         </div>
       </div>
-      ${isTaken
-        ? `<span class="taken-badge">กินแล้ว</span>`
-        : `<button class="take-btn" onclick="event.stopPropagation();takePill('${log.id}')"><i class="fas fa-check"></i></button>`
-      }
+      ${buttonHtml}
     </div>`;
   }).join('');
 }
@@ -451,9 +457,15 @@ function getThaiName(engName) {
 }
 
 function takePill(logId) {
+  const todayStr = getDateStr(new Date());
   let logs = getData('medLogs');
   const idx = logs.findIndex(l => l.id === logId);
   if (idx !== -1) {
+    const logDate = logs[idx].date;
+    if (logDate !== todayStr) {
+      showToast('สามารถบันทึกการกินยาได้เฉพาะวันนี้เท่านั้น');
+      return;
+    }
     logs[idx].status = 'taken';
     logs[idx].takenTime = getTimeStr();
     setData('medLogs', logs);
@@ -954,7 +966,7 @@ function toggleArr(arr, item) {
 
 /* ===== PROFILE ===== */
 function renderProfile() {
-  const profile = getObj('profile') || { name:'', age:'', diagnosis:'', emergencyContact:'', emergencyPhone:'', doctorName:'', doctorPhone:'', nextAppointment:'' };
+  const profile = getObj('profile') || { name:'', hn:'', age:'', diagnosis:'', emergencyContact:'', emergencyPhone:'', doctorName:'', doctorPhone:'', nextAppointment:'' };
   const phone = profile.emergencyPhone || '1669';
   document.getElementById('emergencyNumber').textContent = phone;
   document.getElementById('emergencyCallBtn').href = `tel:${phone}`;
@@ -965,6 +977,7 @@ function renderProfile() {
   const fields = [
     { section:'ข้อมูลผู้ป่วย', icon:'fa-user', color:'var(--primary)', rows:[
       { key:'name', label:'ชื่อ-สกุล', placeholder:'ระบุชื่อ-สกุล' },
+      { key:'hn', label:'เลขที่โรงพยาบาล (HN)', placeholder:'ระบุเลขที่ HN' },
       { key:'age', label:'อายุ', placeholder:'ระบุอายุ', type:'number' },
       { key:'diagnosis', label:'การวินิจฉัย', placeholder:'เช่น Epilepsy, Post-TBI' },
     ]},
@@ -1101,4 +1114,107 @@ document.querySelectorAll('.modal').forEach(modal => {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.classList.remove('active');
   });
+});
+
+
+/* ===== GOOGLE SHEET INTEGRATION ===== */
+// Google Form URL - แทนที่ด้วย URL ของ Google Form ของคุณ
+const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAukHlHfPDMztqyVgnmEBBhFB3doYNVfkziA9r6Z4gHPbGyA/formResponse';
+
+// ฟิลด์ ID ของ Google Form
+const FORM_FIELDS = {
+  username: 'entry.607237854',       // Username
+  hn: 'entry.1510434627',            // Hospital Number (HN)
+  date: 'entry.1957480164',          // วันที่บันทึก
+  medName: 'entry.279375545',        // ชื่อยา (Medication Name)
+  status: 'entry.1642115361',        // สถานะการกินยา (Status)
+  actualTime: 'entry.1324849634',    // เวลาที่กินจริง (Actual Time Taken)
+  seizure: 'entry.1692092125',       // มีอาการชัก
+  seizureSeverity: 'entry.219841705', // ความรุนแรงของอาการชัก
+  sideEffect: 'entry.341674460',     // มีผลข้างเคียง
+  sideEffectType: 'entry.273226191', // ชนิดของผลข้างเคียง
+  sideEffectSeverity: 'entry.294989148' // ความรุนแรงของผลข้างเคียง
+};
+
+// ฟังก์ชันสำหรับส่งข้อมูลไปยัง Google Sheet
+function submitToGoogleSheet() {
+  const username = currentUser;
+  const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
+  const hn = users[username]?.hn || '';
+  
+  const meds = getData('medications');
+  const medLogs = getData('medLogs');
+  const seizures = getData('seizures');
+  const sideEffects = getData('sideEffects');
+  
+  if (meds.length === 0 && medLogs.length === 0 && seizures.length === 0 && sideEffects.length === 0) {
+    showToast('ไม่มีข้อมูลที่จะส่ง');
+    return;
+  }
+  
+  // สร้าง FormData สำหรับส่ง
+  const formData = new FormData();
+  formData.append(FORM_FIELDS.username, username);
+  formData.append(FORM_FIELDS.hn, hn);
+  formData.append(FORM_FIELDS.date, getDateStr(new Date()));
+  
+  // ส่งข้อมูลการกินยา
+  medLogs.forEach((log, index) => {
+    const med = meds.find(m => m.id === log.medicationId);
+    if (med) {
+      const formDataCopy = new FormData(formData);
+      formDataCopy.append(FORM_FIELDS.medName, med.name);
+      formDataCopy.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
+      
+      // ส่งข้อมูลการชัก
+      const seizure = seizures.find(s => s.date === log.date);
+      if (seizure) {
+        formDataCopy.append(FORM_FIELDS.seizure, 'มี');
+        formDataCopy.append(FORM_FIELDS.seizureSeverity, seizure.severity || '');
+      } else {
+        formDataCopy.append(FORM_FIELDS.seizure, 'ไม่มี');
+      }
+      
+      // ส่งข้อมูลผลข้างเคียง
+      const sideEffect = sideEffects.find(s => s.date === log.date);
+      if (sideEffect) {
+        formDataCopy.append(FORM_FIELDS.sideEffect, 'มี');
+        formDataCopy.append(FORM_FIELDS.sideEffectType, sideEffect.symptoms?.join(', ') || '');
+        formDataCopy.append(FORM_FIELDS.sideEffectSeverity, sideEffect.severity || '');
+      } else {
+        formDataCopy.append(FORM_FIELDS.sideEffect, 'ไม่มี');
+      }
+      
+      // ส่งข้อมูลไปยัง Google Form
+      fetch(GOOGLE_FORM_URL, {
+        method: 'POST',
+        body: formDataCopy,
+        mode: 'no-cors'
+      }).then(() => {
+        showToast('ส่งข้อมูลไปยัง Google Sheet สำเร็จ!');
+      }).catch(err => {
+        console.error('Error:', err);
+        showToast('เกิดข้อผิดพลาดในการส่งข้อมูล');
+      });
+    }
+  });
+}
+
+// เพิ่มปุ่มส่งข้อมูลในหน้า Profile
+function addGoogleSheetButton() {
+  const profileContent = document.getElementById('tabProfile');
+  if (profileContent && !document.getElementById('submitGoogleSheetBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'submitGoogleSheetBtn';
+    btn.className = 'btn-primary btn-large';
+    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> ส่งข้อมูลไปยัง Google Sheet';
+    btn.onclick = submitToGoogleSheet;
+    btn.style.marginTop = '20px';
+    profileContent.appendChild(btn);
+  }
+}
+
+// เรียกใช้เมื่อเข้าแอป
+window.addEventListener('load', () => {
+  setTimeout(addGoogleSheetButton, 500);
 });
