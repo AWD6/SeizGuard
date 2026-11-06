@@ -45,7 +45,6 @@ body {
 }
 .login-logo { width:80px; height:80px; border-radius:24px; background:rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; margin-bottom:16px; }
 .login-logo i { font-size:36px; color:#fff; }
-.login-logo-text .logo-text { font-size:36px; font-weight:700; color:#fff; }
 .login-title { font-size:32px; font-weight:700; color:#fff; }
 .login-subtitle { font-size:18px; font-weight:500; color:rgba(255,255,255,0.9); margin-top:2px; }
 .login-desc { font-size:13px; color:rgba(255,255,255,0.7); margin-top:8px; text-align:center; }
@@ -68,7 +67,7 @@ body {
 }
 .btn-outline:active { background:rgba(255,255,255,0.1); }
 .btn-large { padding:16px; font-size:16px; display:flex; align-items:center; justify-content:center; gap:8px; }
-.login-note { font-size:11px; color:rgba(255,255,255,0.5); margin-top:20px; text-align:center; }
+.login-note { max-width:100%; font-size:11px; color:rgba(255,255,255,0.5); margin-top:20px; text-align:center; text-wrap:balance; }
 
 /* === MAIN APP === */
 #mainApp { flex-direction:column; }
