@@ -268,33 +268,158 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-/* ===== AUTH ===== */
-function handleLogin() {
-  const u = document.getElementById('loginUsername').value.trim();
-  const hn = document.getElementById('loginHN').value.trim();
-  if (!u || !hn) { showToast('กรุณากรอกชื่อผู้ใช้ และเลขที่โรงพยาบาล'); return; }
-  const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
-  if (!users[u]) { showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน'); return; }
-  if (users[u].hn !== hn) { showToast('เลขที่โรงพยาบาลไม่ถูกต้อง'); return; }
-  currentUser = u;
-  localStorage.setItem('seizguard_currentUser', u);
-  enterApp();
+function loadUsers() {
+  try { return JSON.parse(localStorage.getItem('seizguard_users') || '{}') || {}; }
+  catch (_) { return {}; }
 }
 
-function handleRegister() {
-  const u = document.getElementById('loginUsername').value.trim();
-  const hn = document.getElementById('loginHN').value.trim();
-  if (!u || !hn) { showToast('กรุณากรอกชื่อผู้ใช้ และเลขที่โรงพยาบาล'); return; }
-  if (u.length < 3) { showToast('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร'); return; }
-  if (hn.length < 1) { showToast('กรุณากรอกเลขที่โรงพยาบาล'); return; }
-  const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
-  if (users[u]) { showToast('ชื่อผู้ใช้นี้ถูกใช้แล้ว'); return; }
-  users[u] = { hn: hn };
+function saveUsers(users) {
   localStorage.setItem('seizguard_users', JSON.stringify(users));
-  currentUser = u;
-  localStorage.setItem('seizguard_currentUser', u);
-  showToast('ลงทะเบียนสำเร็จ!');
-  enterApp();
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function hexToBytes(hex) {
+  if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) throw new Error('Invalid PIN salt');
+  return Uint8Array.from(hex.match(/.{2}/g), byte => parseInt(byte, 16));
+}
+
+function createPinSalt() {
+  if (!window.crypto || !window.crypto.subtle || !window.crypto.getRandomValues) {
+    throw new Error('Secure browser cryptography is unavailable');
+  }
+  const salt = new Uint8Array(16);
+  window.crypto.getRandomValues(salt);
+  return bytesToHex(salt);
+}
+
+async function hashPin(pin, saltHex) {
+  const key = await window.crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(pin),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await window.crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    salt: hexToBytes(saltHex),
+    iterations: 120000,
+    hash: 'SHA-256'
+  }, key, 256);
+  return bytesToHex(new Uint8Array(bits));
+}
+
+function purgeLegacyPatientIdentifiers() {
+  const users = loadUsers();
+  Object.values(users).forEach(account => {
+    if (account && typeof account === 'object') delete account.hn;
+  });
+  saveUsers(users);
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith('seizguard_') || !key.endsWith('_profile')) continue;
+    try {
+      const profile = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!profile || typeof profile !== 'object') continue;
+      ['name', 'hn', 'firstName', 'lastName', 'first_name', 'last_name'].forEach(field => delete profile[field]);
+      localStorage.setItem(key, JSON.stringify(profile));
+    } catch (_) {
+      localStorage.removeItem(key);
+    }
+  }
+}
+
+/* ===== AUTH ===== */
+async function handleLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const pin = document.getElementById('loginPIN').value.trim();
+
+  if (!username || !pin) {
+    showToast('กรุณากรอกชื่อผู้ใช้และ PIN');
+    return;
+  }
+  if (!/^\d{6}$/.test(pin)) {
+    showToast('PIN ต้องเป็นตัวเลข 6 หลัก');
+    return;
+  }
+
+  const users = loadUsers();
+  const account = users[username];
+  if (!account) {
+    showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน');
+    return;
+  }
+
+  try {
+    if (account.pinSalt && account.pinHash) {
+      if (await hashPin(pin, account.pinSalt) !== account.pinHash) {
+        showToast('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');
+        return;
+      }
+    } else {
+      // Upgrade an existing local account that used HN as its second login field.
+      account.pinSalt = createPinSalt();
+      account.pinHash = await hashPin(pin, account.pinSalt);
+      delete account.hn;
+      users[username] = account;
+      saveUsers(users);
+    }
+
+    currentUser = username;
+    localStorage.setItem('seizguard_currentUser', username);
+    purgeLegacyPatientIdentifiers();
+    enterApp();
+  } catch (error) {
+    console.error('Login error:', error);
+    showToast('ต้องเปิดแอปผ่าน HTTPS หรือ localhost เพื่อใช้ PIN อย่างปลอดภัย');
+  }
+}
+
+async function handleRegister() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const pin = document.getElementById('loginPIN').value.trim();
+
+  if (!username || !pin) {
+    showToast('กรุณากรอกชื่อผู้ใช้และ PIN');
+    return;
+  }
+  if (username.length < 3) {
+    showToast('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
+    return;
+  }
+  if (!/^\d{6}$/.test(pin)) {
+    showToast('PIN ต้องเป็นตัวเลข 6 หลัก');
+    return;
+  }
+
+  const users = loadUsers();
+  const existing = users[username];
+  if (existing && existing.pinSalt && existing.pinHash) {
+    showToast('ชื่อผู้ใช้นี้ถูกใช้แล้ว');
+    return;
+  }
+
+  try {
+    const account = existing && typeof existing === 'object' ? existing : {};
+    account.pinSalt = createPinSalt();
+    account.pinHash = await hashPin(pin, account.pinSalt);
+    delete account.hn;
+    users[username] = account;
+    saveUsers(users);
+
+    currentUser = username;
+    localStorage.setItem('seizguard_currentUser', username);
+    purgeLegacyPatientIdentifiers();
+    showToast('ลงทะเบียนสำเร็จ!');
+    enterApp();
+  } catch (error) {
+    console.error('Registration error:', error);
+    showToast('ต้องเปิดแอปผ่าน HTTPS หรือ localhost เพื่อใช้ PIN อย่างปลอดภัย');
+  }
 }
 
 function handleLogout() {
@@ -303,7 +428,7 @@ function handleLogout() {
   document.getElementById('mainApp').classList.remove('active');
   document.getElementById('loginScreen').classList.add('active');
   document.getElementById('loginUsername').value = '';
-  document.getElementById('loginHN').value = '';
+  document.getElementById('loginPIN').value = '';
 }
 
 function enterApp() {
@@ -966,7 +1091,9 @@ function toggleArr(arr, item) {
 
 /* ===== PROFILE ===== */
 function renderProfile() {
-  const profile = getObj('profile') || { name:'', hn:'', age:'', diagnosis:'', emergencyContact:'', emergencyPhone:'', doctorName:'', doctorPhone:'', nextAppointment:'' };
+  const profile = getObj('profile') || { age:'', diagnosis:'', emergencyContact:'', emergencyPhone:'', doctorName:'', doctorPhone:'', nextAppointment:'' };
+  ['name', 'hn', 'firstName', 'lastName', 'first_name', 'last_name'].forEach(field => delete profile[field]);
+  setObj('profile', profile);
   const phone = profile.emergencyPhone || '1669';
   document.getElementById('emergencyNumber').textContent = phone;
   document.getElementById('emergencyCallBtn').href = `tel:${phone}`;
@@ -976,8 +1103,6 @@ function renderProfile() {
 
   const fields = [
     { section:'ข้อมูลผู้ป่วย', icon:'fa-user', color:'var(--primary)', rows:[
-      { key:'name', label:'ชื่อ-สกุล', placeholder:'ระบุชื่อ-สกุล' },
-      { key:'hn', label:'เลขที่โรงพยาบาล (HN)', placeholder:'ระบุเลขที่ HN' },
       { key:'age', label:'อายุ', placeholder:'ระบุอายุ', type:'number' },
       { key:'diagnosis', label:'การวินิจฉัย', placeholder:'เช่น Epilepsy, Post-TBI' },
     ]},
@@ -1011,7 +1136,7 @@ function renderProfile() {
 function toggleEditProfile() {
   if (editingProfile) {
     const profile = {};
-    ['name','age','diagnosis','emergencyContact','emergencyPhone','doctorName','doctorPhone','nextAppointment'].forEach(k => {
+    ['age','diagnosis','emergencyContact','emergencyPhone','doctorName','doctorPhone','nextAppointment'].forEach(k => {
       const el = document.getElementById('pf_' + k);
       profile[k] = el ? el.value.trim() : '';
     });
@@ -1098,6 +1223,7 @@ function closeModal(id) {
 
 /* ===== INIT ===== */
 document.addEventListener('DOMContentLoaded', () => {
+  purgeLegacyPatientIdentifiers();
   const saved = localStorage.getItem('seizguard_currentUser');
   if (saved) {
     const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
@@ -1124,7 +1250,6 @@ const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAukHlHfPDMzt
 // ฟิลด์ ID ของ Google Form
 const FORM_FIELDS = {
   username: 'entry.607237854',
-  hn: 'entry.1510434627',
   date: 'entry.1957480164',
   medName: 'entry.279375545',
   status: 'entry.1642115361',
@@ -1139,9 +1264,7 @@ const FORM_FIELDS = {
 // ฟังก์ชันสำหรับส่งข้อมูลไปยัง Google Sheet
 function submitToGoogleSheet() {
   const username = currentUser;
-  const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
-  const hn = users[username]?.hn || '';
-  
+
   const meds = getData('medications');
   const medLogs = getData('medLogs');
   const seizures = getData('seizures');
@@ -1160,7 +1283,6 @@ function submitToGoogleSheet() {
     if (med) {
       const formData = new FormData();
       formData.append(FORM_FIELDS.username, username);
-      formData.append(FORM_FIELDS.hn, hn);
       formData.append(FORM_FIELDS.date, log.date);
       formData.append(FORM_FIELDS.medName, med.name);
       formData.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
