@@ -22,12 +22,12 @@
       <div class="login-form">
         <div class="input-group">
           <i class="fas fa-user"></i>
-          <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้ (Username)" autocomplete="username">
+          <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้ (ไม่ใช้ชื่อจริง)" autocomplete="username">
         </div>
 
         <div class="input-group">
-          <i class="fas fa-hospital"></i>
-          <input type="text" id="loginHN" placeholder="เลขที่โรงพยาบาล (HN)" autocomplete="off">
+          <i class="fas fa-lock"></i>
+          <input type="password" id="loginPIN" placeholder="PIN 6 หลัก" autocomplete="current-password" inputmode="numeric" maxlength="6">
         </div>
         <button class="btn-primary btn-large" onclick="handleLogin()">
           <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
