@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>SeizGuard - ชักไม่ซ้ำ</title>
+  <meta name="theme-color" content="#0b666c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="pill-icon-180.png">
   <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -18,7 +21,7 @@
       </div>
       <h1 class="login-title">SeizGuard</h1>
       <p class="login-subtitle">ชักไม่ซ้ำ</p>
-      <p class="login-desc">ระบบติดตามยากันชักสำหรับผู้ป่วยและผู้ดูแล</p>
+      <p class="login-desc">บันทึกอาการและแจ้งเตือนยากันชัก รวมถึงยาโรคประจำตัว</p>
       <div class="login-form">
         <div class="input-group">
           <i class="fas fa-user"></i>
@@ -36,6 +39,7 @@
           <i class="fas fa-user-plus"></i> ลงทะเบียนผู้ใช้ใหม่
         </button>
       </div>
+      <a href="admin.html" style="color:white;margin-top:18px">เข้าสู่ระบบสำหรับผู้ดูแล</a>
       <p class="login-note">conceived, designed, and Brought to Life by RN.Patipon Wiyo</p>
     </div>
   </div>
@@ -70,7 +74,7 @@
         <div id="medList"></div>
         <button class="missed-dose-btn" onclick="showTab('missedDose')">
           <i class="fas fa-question-circle"></i>
-          <span>ลืมกินยา? ดูคำแนะนำ</span>
+          <span>ลืมยากันชัก? ดูคำแนะนำ</span>
           <i class="fas fa-chevron-right"></i>
         </button>
       </div>
@@ -201,6 +205,8 @@
         <input type="text" id="medDosage" class="field-input" placeholder="เช่น 100mg, 500mg">
         <label class="field-label">เวลากินยา</label>
         <div class="time-options" id="timeOptions"></div>
+        <label class="field-label" for="customMedTime">เพิ่มเวลาอื่น</label>
+        <div style="display:flex;gap:8px"><input id="customMedTime" type="time" class="field-input"><button type="button" class="btn-primary" onclick="addCustomMedicationTime()">เพิ่มเวลา</button></div>
         <label class="field-label">จำนวนเม็ดยาที่ได้รับ (ทั้งหมด)</label>
         <input type="number" id="medPillCount" class="field-input" placeholder="เช่น 30, 60">
         <label class="field-label">หมายเหตุ</label>
@@ -275,6 +281,8 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="cloud-config.js"></script>
   <script src="script.js"></script>
+  <script src="patient-cloud.js"></script>
 </body>
 </html>

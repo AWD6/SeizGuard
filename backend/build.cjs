@@ -1,0 +1,3 @@
+const fs=require('fs');
+require('esbuild').buildSync({entryPoints:[__dirname+'/server.mjs'],bundle:true,format:'iife',globalName:'SGBackend',platform:'neutral',target:'es2020',outfile:__dirname+'/Code.gs',minify:true});
+fs.appendFileSync(__dirname+'/Code.gs',`\nfunction doPost(e){let b;try{b=JSON.parse(e.postData.contents);}catch(_){b={};}return ContentService.createTextOutput(JSON.stringify(SGBackend.handle(b))).setMimeType(ContentService.MimeType.JSON);}\nfunction doGet(){return ContentService.createTextOutput(JSON.stringify({ok:true,service:'SeizGuard'})).setMimeType(ContentService.MimeType.JSON);}\nfunction sendMedicationReminders(){SGBackend.sendReminders();}\n`);

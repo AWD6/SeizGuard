@@ -252,6 +252,7 @@ let missedDoseStep = 'frequency';
 let missedDoseFreq = 0;
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,9); }
+function escapeHTML(value) { return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
 function getDateStr(d) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -262,7 +263,7 @@ function getTimeStr() { const n=new Date(); return n.getHours().toString().padSt
 
 function userKey(key) { return `seizguard_${currentUser}_${key}`; }
 function getData(key) { try { return JSON.parse(localStorage.getItem(userKey(key))) || []; } catch { return []; } }
-function setData(key, val) { localStorage.setItem(userKey(key), JSON.stringify(val)); }
+function setData(key, val) { localStorage.setItem(userKey(key), JSON.stringify(val)); window.SeizGuardCloud?.changed(); }
 function getObj(key) { try { return JSON.parse(localStorage.getItem(userKey(key))); } catch { return null; } }
 function setObj(key, val) { localStorage.setItem(userKey(key), JSON.stringify(val)); }
 
@@ -475,7 +476,8 @@ async function handleRegister() {
   }
 }
 
-function handleLogout() {
+async function handleLogout() {
+  try { await window.SeizGuardCloud?.logout(); } catch (_) { showToast('ยังปิดแจ้งเตือนไม่สำเร็จ กรุณาลองออกจากระบบอีกครั้ง'); return; }
   currentUser = null;
   localStorage.removeItem('seizguard_currentUser');
   document.getElementById('mainApp').classList.remove('active');
@@ -488,6 +490,7 @@ function enterApp() {
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('mainApp').classList.add('active');
   showTab('home');
+  window.SeizGuardCloud?.start();
 }
 
 /* ===== TABS ===== */
@@ -616,9 +619,9 @@ function renderMedList() {
         <i class="fas ${isTaken?'fa-check-circle':'fa-clock'}"></i>
       </div>
       <div class="med-info">
-        <div class="med-name">${med.name}</div>
+        <div class="med-name">${escapeHTML(med.name)}</div>
         ${thaiName ? `<div class="med-name-th">${thaiName}</div>` : ''}
-        <div class="med-dosage">${med.dosage}</div>
+        <div class="med-dosage">${escapeHTML(med.dosage)}</div>
         <div class="med-time-row">
           <i class="fas fa-clock"></i> ${log.scheduledTime}
           ${log.takenTime ? `<span class="taken-time">(กินเมื่อ ${log.takenTime})</span>` : ''}
@@ -671,7 +674,8 @@ function renderCommonMeds() {
 }
 
 function renderTimeOptions() {
-  document.getElementById('timeOptions').innerHTML = TIME_PRESETS.map(p => {
+  const options = [...TIME_PRESETS, ...selectedTimes.filter(t => !TIME_PRESETS.some(p => p.time === t)).map(time => ({label:'เวลาที่เลือก',time}))];
+  document.getElementById('timeOptions').innerHTML = options.map(p => {
     const sel = selectedTimes.includes(p.time);
     return `<div class="time-option ${sel?'selected':''}" onclick="toggleTime('${p.time}')">
       <i class="fas ${sel?'fa-check-circle':'fa-circle'}"></i>
@@ -685,6 +689,13 @@ function toggleTime(time) {
   else selectedTimes.push(time);
   selectedTimes.sort();
   renderTimeOptions();
+}
+
+function addCustomMedicationTime() {
+  const input=document.getElementById('customMedTime');
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)) { showToast('กรุณาเลือกเวลา'); return; }
+  if (!selectedTimes.includes(input.value)) selectedTimes.push(input.value);
+  selectedTimes.sort(); renderTimeOptions(); input.value='';
 }
 
 function saveNewMedication() {
@@ -727,8 +738,8 @@ function showMedDetail(medId) {
   document.getElementById('medDetailContent').innerHTML = `
     <div class="detail-card">
       <div class="info-grid">
-        <div class="info-item"><div class="info-label">ชื่อยา</div><div class="info-value">${med.name}</div>${thaiName?`<div style="font-size:13px;color:var(--text2);margin-top:2px">${thaiName}</div>`:''}</div>
-        <div class="info-item"><div class="info-label">ขนาดยา</div><div class="info-value">${med.dosage}</div></div>
+        <div class="info-item"><div class="info-label">ชื่อยา</div><div class="info-value">${escapeHTML(med.name)}</div>${thaiName?`<div style="font-size:13px;color:var(--text2);margin-top:2px">${thaiName}</div>`:''}</div>
+        <div class="info-item"><div class="info-label">ขนาดยา</div><div class="info-value">${escapeHTML(med.dosage)}</div></div>
       </div>
       <div class="info-grid" style="margin-top:12px">
         <div class="info-item"><div class="info-label">จำนวนครั้ง/วัน</div><div class="info-value">${med.frequency} ครั้ง</div></div>
@@ -757,7 +768,7 @@ function showMedDetail(medId) {
         return `<div class="log-row"><div class="log-dot" style="background:${c}"></div><div class="log-row-date">${l.date}</div><div class="log-row-time">${l.scheduledTime}</div><div class="log-row-status" style="color:${c}">${s}</div></div>`;
       }).join('')}
     </div>
-    ${med.notes?`<div class="detail-card"><h4>หมายเหตุ</h4><p style="font-size:14px;color:var(--text2);line-height:1.6">${med.notes}</p></div>`:''}`;
+    ${med.notes?`<div class="detail-card"><h4>หมายเหตุ</h4><p style="font-size:14px;color:var(--text2);line-height:1.6">${escapeHTML(med.notes)}</p></div>`:''}`;
 
   showTab('medDetail');
 }
@@ -866,9 +877,9 @@ function renderSeizureLogs() {
         <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span><span style="color:var(--text2)">${l.time}</span></div>
         <span class="severity-badge" style="background:${sev.color}20;color:${sev.color}">${sev.label}</span>
       </div>
-      ${l.duration ? `<div class="log-detail">ระยะเวลา: ${l.duration}</div>` : ''}
+      ${l.duration ? `<div class="log-detail">ระยะเวลา: ${escapeHTML(l.duration)}</div>` : ''}
       ${l.symptoms.length>0 ? `<div class="tags-row">${l.symptoms.map(s=>`<span class="tag">${s}</span>`).join('')}</div>` : ''}
-      ${l.notes ? `<div class="log-notes">${l.notes}</div>` : ''}
+      ${l.notes ? `<div class="log-notes">${escapeHTML(l.notes)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -887,11 +898,11 @@ function renderSideEffectLogs() {
     const medName = med ? med.name : '';
     return `<div class="log-card">
       <div class="log-header">
-        <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span>${medName ? `<span style="font-size:11px;color:var(--primary);margin-left:6px"><i class="fas fa-pills"></i> ${medName}</span>` : ''}</div>
+        <div class="log-date-row"><i class="fas fa-calendar"></i><span>${l.date}</span>${medName ? `<span style="font-size:11px;color:var(--primary);margin-left:6px"><i class="fas fa-pills"></i> ${escapeHTML(medName)}</span>` : ''}</div>
         <span class="severity-badge" style="background:${sev.color}20;color:${sev.color}">${sev.label}</span>
       </div>
       <div class="tags-row">${l.effects.map(e=>`<span class="tag">${e}</span>`).join('')}</div>
-      ${l.notes ? `<div class="log-notes">${l.notes}</div>` : ''}
+      ${l.notes ? `<div class="log-notes">${escapeHTML(l.notes)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1090,7 +1101,7 @@ function renderSideEffectMeds() {
   const meds = getData('medications');
   document.getElementById('sideEffectMeds').innerHTML = meds.map(m => {
     const sel = selectedSideEffectMedId === m.id;
-    return `<button class="chip ${sel?'selected':''}" onclick="selectedSideEffectMedId='${m.id}';renderSideEffectMeds();renderSideEffectSymptomChips();selectedSideEffects=[];calculateSideEffectSeverity()">${m.name}</button>`;
+    return `<button class="chip ${sel?'selected':''}" onclick="selectedSideEffectMedId='${m.id}';renderSideEffectMeds();renderSideEffectSymptomChips();selectedSideEffects=[];calculateSideEffectSeverity()">${escapeHTML(m.name)}</button>`;
   }).join('') || '<p style="color:var(--text3);font-size:13px">ยังไม่มีรายการยา</p>';
 }
 
@@ -1179,8 +1190,8 @@ function renderProfile() {
         ${section.rows.map(r => `<div class="profile-row">
           <span class="profile-label">${r.label}</span>
           ${editingProfile
-            ? `<input class="profile-input" id="pf_${r.key}" value="${profile[r.key]||''}" placeholder="${r.placeholder}" type="${r.type||'text'}">`
-            : `<span class="profile-value ${!profile[r.key]?'placeholder':''}">${profile[r.key] || r.placeholder}</span>`
+            ? `<input class="profile-input" id="pf_${r.key}" value="${escapeHTML(profile[r.key]||'')}" placeholder="${r.placeholder}" type="${r.type||'text'}">`
+            : `<span class="profile-value ${!profile[r.key]?'placeholder':''}">${escapeHTML(profile[r.key] || r.placeholder)}</span>`
           }
         </div>`).join('')}
       </div>
@@ -1435,7 +1446,7 @@ async function submitToGoogleSheet() {
 
 function addGoogleSheetButton() {
   const profileContent = document.getElementById('tabProfile');
-  if (!profileContent || document.getElementById('submitGoogleSheetBtn')) return;
+  if (!profileContent || document.getElementById('submitGoogleSheetBtn') || window.SEIZGUARD_CLOUD?.endpoint) return;
   const btn = document.createElement('button');
   btn.id = 'submitGoogleSheetBtn';
   btn.className = 'btn-primary btn-large';

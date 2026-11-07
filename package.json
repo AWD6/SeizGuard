@@ -1,0 +1,1 @@
+{"name":"seizguard","private":true,"scripts":{"build:backend":"node backend/build.cjs","test":"node --test tests/*.test.cjs"},"devDependencies":{"@noble/curves":"1.9.7","@noble/hashes":"1.8.0","esbuild":"0.25.12"}}
