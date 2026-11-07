@@ -18,7 +18,16 @@ function text(value,max=200){if(typeof value!=='string'||value.length>max)fail('
 function safeRecordId(value){const id=text(value,80);if(!/^[A-Za-z0-9_-]{1,80}$/.test(id))fail('รหัสรายการไม่ถูกต้อง');return id;}
 function patientId(value){const v=text(value,40);if(!/^SG-[A-F0-9]{4}(?:-[A-F0-9]{4}){3}$/.test(v))fail('รหัส SeizGuard ไม่ถูกต้อง');return v;}
 function audit(actor,action,id){const key=Utilities.getUuid();put('Audit',key,{actor,action,patientId:id||'',at:new Date().toISOString()});}
-function admin(session,owner=false){const raw=CacheService.getScriptCache().get('session:'+hmac(text(session,100)));if(!raw)fail('กรุณาเข้าสู่ระบบอีกครั้ง');const a=find('Admins',raw);if(!a||!a.approved||owner&&a.role!=='owner')fail();return a;}
+function admin(session,owner=false){const raw=CacheService.getScriptCache().get('session:'+hmac(text(session,100)));if(!raw)fail('กรุณาเข้าสู่ระบบอีกครั้ง');let saved;try{saved=JSON.parse(raw);}catch(_){fail('กรุณาเข้าสู่ระบบอีกครั้ง');}const a=find('Admins',saved.id);if(!a||!a.approved||!constantEqual(a.keyHash,saved.keyHash)||owner&&a.role!=='owner')fail('สิทธิ์หรือรหัสเปลี่ยนแล้ว กรุณาเข้าสู่ระบบใหม่');return a;}
+function authenticateAdmin(code,ownerOnly=false){
+ const now=Date.now(),p=props();let guard;try{guard=JSON.parse(p.getProperty('ADMIN_LOGIN_GUARD')||'{}');}catch(_){guard={};}
+ if(now<(guard.lockUntil||0))fail('ลองรหัสผิดหลายครั้ง กรุณารอ 15 นาที');
+ const a=records('Admins').find(a=>a.approved&&constantEqual(a.keyHash,hmac(text(code,100))));
+ if(!a||ownerOnly&&a.role!=='owner'){
+   if(!guard.start||now-guard.start>900000)guard={start:now,count:0};guard.count=(guard.count||0)+1;if(guard.count>=5)guard.lockUntil=now+900000;p.setProperties({ADMIN_LOGIN_GUARD:JSON.stringify(guard)});fail('รหัส admin ไม่ถูกต้อง หรือยังไม่ได้รับอนุมัติ');
+ }
+ p.setProperties({ADMIN_LOGIN_GUARD:'{}'});return a;
+}
 function patient(body){const id=patientId(body.patientId);const p=find('Patients',id);if(!p||!constantEqual(p.tokenHash,hmac(text(body.patientToken,120))))fail();return p;}
 function identity(id){const sheet=book().getSheetByName('ทะเบียนผู้ป่วย');const rows=sheet.getDataRange().getDisplayValues().slice(1).filter(r=>r[0]===id);if(rows.length>1)fail('พบรหัสซ้ำในทะเบียน กรุณาแก้ก่อนเข้าถึงข้อมูล');return rows[0]?{name:rows[0][2],hn:rows[0][1]}:null;}
 function cleanMedication(m){const name=text(m.name,120),dosage=text(m.dosage,120);if(!name||!dosage)fail('ระบุชื่อและขนาดยาตามคำสั่งการรักษา');if(!Array.isArray(m.times)||!m.times.length||m.times.length>12||m.times.some(t=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)))fail('เวลาไม่ถูกต้อง');return {id:m.id?safeRecordId(m.id):Utilities.getUuid(),name,dosage,times:[...new Set(m.times)].sort(),active:m.active!==false,source:'clinician',updatedAt:new Date().toISOString()};}
@@ -43,10 +52,12 @@ export function install(config){
 export function dispatch(b){
  if(!b||typeof b.action!=='string')fail('คำขอไม่ถูกต้อง');
  if(b.action==='health')return {ready:!!props().getProperty('REGISTRY_ID'),vapidPublic:props().getProperty('VAPID_PUBLIC')};
+ if(b.action==='admin.owner.rotate'){
+   const a=authenticateAdmin(b.currentCode,true),newCode=text(b.newCode,100);if(newCode.length<5||/\s/.test(newCode))fail('รหัสใหม่ต้องมีอย่างน้อย 5 ตัว และไม่มีช่องว่าง');put('Admins',a.id,{...a,keyHash:hmac(newCode)});audit(a.id,'admin-key-rotated','');return {rotated:true};
+ }
  if(b.action==='admin.login'){
-   const code=text(b.adminCode,100);const bucket='login:'+hmac(code.slice(0,12));const cache=CacheService.getScriptCache();const count=Number(cache.get(bucket)||0);if(count>=8)fail('ลองใหม่ภายหลัง');cache.put(bucket,String(count+1),900);
-   const a=records('Admins').find(a=>a.approved&&constantEqual(a.keyHash,hmac(code)));if(!a)fail('รหัส admin ไม่ถูกต้อง หรือยังไม่ได้รับอนุมัติ');
-   const id=patientId(b.patientId),view=summary(id),session=token();cache.put('session:'+hmac(session),a.id,1800);audit(a.id,'view',id);return {session,role:a.role,label:a.label,patient:view};
+   const a=authenticateAdmin(b.adminCode),cache=CacheService.getScriptCache();
+   const id=patientId(b.patientId),view=summary(id),session=token();cache.put('session:'+hmac(session),JSON.stringify({id:a.id,keyHash:a.keyHash}),1800);audit(a.id,'view',id);return {session,role:a.role,label:a.label,patient:view};
  }
  if(b.action.startsWith('admin.')){
    const a=admin(b.session,b.action.startsWith('admin.access.'));
