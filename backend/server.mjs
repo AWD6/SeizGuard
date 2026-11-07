@@ -244,10 +244,40 @@ export function dueSlots(med,lead,now){
 export function sendReminders(){
  recordCache={};cachedBook=null;
  const lock=LockService.getScriptLock();if(!lock.tryLock(1000))return;
- try{const now=Date.now(),patients=records('Patients'),meds=records('Medications').filter(m=>m.active),events=records('Events'),sent=new Set(records('Sent').filter(s=>now-s.at<7*86400000).map(s=>s.id));
- for(const sub of records('Subscriptions').filter(s=>s.active)){const p=patients.find(p=>p.id===sub.patientId);if(!p)continue;for(const med of meds.filter(m=>m.patientId===p.id))for(const slot of dueSlots(med,p.leadMinutes??30,now)){
- const key=sub.id+':'+med.id+':'+slot.date+':'+slot.time;if(sent.has(key)||events.some(e=>e.patientId===p.id&&e.medicationId===med.id&&e.type==='dose'&&e.date===slot.date&&e.time===slot.time&&e.status==='taken'))continue;
- const r=sendPush(sub,reminderMessage(med,slot.time));const status=r.getResponseCode();if(status>=200&&status<300){put('Sent',key,{at:now});sent.add(key);}else if([404,410].includes(status))put('Subscriptions',sub.id,{...sub,active:false});
- }} }finally{lock.releaseLock();}
+ const tasks=[],now=Date.now();
+ try{
+  const patients=records('Patients'),meds=records('Medications').filter(m=>m.active),events=records('Events');
+  const sent=new Set(records('Sent').filter(s=>now-Number(s.at)<7*86400000&&s.status!=='failed'&&(s.status!=='pending'||now-Number(s.at)<4*60000)).map(s=>s.id));
+  for(const sub of records('Subscriptions').filter(s=>s.active)){
+   const p=patients.find(p=>p.id===sub.patientId);if(!p)continue;
+   for(const med of meds.filter(m=>m.patientId===p.id))for(const slot of dueSlots(med,p.leadMinutes??30,now)){
+    const key=sub.id+':'+med.id+':'+slot.date+':'+slot.time;
+    if(sent.has(key)||events.some(e=>e.patientId===p.id&&e.medicationId===med.id&&e.type==='dose'&&e.date===slot.date&&e.time===slot.time&&e.status==='taken'))continue;
+    put('Sent',key,{at:now,status:'pending'});sent.add(key);tasks.push({key,sub,med,time:slot.time});
+   }
+  }
+ }finally{lock.releaseLock();}
+ // Network requests can take seconds. Keep them outside the lock used by patient login.
+ const results=tasks.map(task=>{
+  try{return {...task,status:sendPush(task.sub,reminderMessage(task.med,task.time)).getResponseCode()};}
+  catch(e){console.error('SeizGuard Push failed: '+e.message);return {...task,status:0};}
+ });
+ if(!results.length)return;
+ if(!lock.tryLock(2000))return; // A pending claim expires while the five-minute reminder window is still open.
+ try{
+  recordCache={};cachedBook=null;
+  for(const result of results){
+   put('Sent',result.key,{at:now,status:result.status>=200&&result.status<300?'sent':'failed'});
+   if([404,410].includes(result.status))put('Subscriptions',result.sub.id,{...result.sub,active:false});
+  }
+ }finally{lock.releaseLock();}
 }
-export function handle(body){recordCache={};cachedBook=null;const lock=LockService.getScriptLock();if(!lock.tryLock(20000))return {ok:false,error:'ระบบกำลังใช้งาน กรุณาลองใหม่'};try{return {ok:true,data:dispatch(body)};}catch(e){return {ok:false,error:e.message,...(e.code?{code:e.code}:{})};}finally{lock.releaseLock();}}
+export function handle(body){
+ recordCache={};cachedBook=null;
+ // These requests use script properties only and do not need the Sheets write lock.
+ if(body?.action==='health'||body?.action==='patient.auth.parameters'){
+  try{return {ok:true,data:dispatch(body)};}catch(e){return {ok:false,error:e.message,...(e.code?{code:e.code}:{})};}
+ }
+ const lock=LockService.getScriptLock();if(!lock.tryLock(8000))return {ok:false,error:'ระบบกำลังใช้งาน กรุณาลองใหม่',code:'BUSY'};
+ try{return {ok:true,data:dispatch(body)};}catch(e){return {ok:false,error:e.message,...(e.code?{code:e.code}:{})};}finally{lock.releaseLock();}
+}

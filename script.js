@@ -398,7 +398,9 @@ async function submitPatientAuth(register = false, migrate = false) {
     enterApp();
     showToast(result.migrated ? 'ย้ายบัญชีสำเร็จ ใช้ชื่อผู้ใช้และ PIN นี้บนเครื่องอื่นได้แล้ว' : register ? 'ลงทะเบียนสำเร็จ' : 'เข้าสู่ระบบแล้ว');
   } catch (error) {
-    message.textContent = error.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่' : error.message;
+    message.textContent = register && error.code === 'USERNAME_TAKEN' && !error.legacyName
+      ? 'ชื่อผู้ใช้นี้ลงทะเบียนแล้ว กรุณากด “เข้าสู่ระบบ” และใช้ PIN เดิม'
+      : error.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่' : error.message;
     if (error.legacyName) {
       migrationSource = error.legacyName;
       document.getElementById('migrateAccountButton').hidden = false;

@@ -88,6 +88,29 @@ test('two independent client stores restore plans, dose history and assessments;
  b.c.setData('medications',b.c.getData('medications').filter(m=>m.id!==medication.id));await b.cloud.sync();await a.cloud.sync();assert.equal(a.c.getData('medications').length,1);
  await b.cloud.logout();assert.equal(await a.cloud.resume(),true);assert.equal(await b.cloud.resume(),false);
 });
+test('a stale mobile account without a PIN verifier can use an existing cloud login without uploading old local data',async()=>{
+ const r=runtime(),central=auth(r,'register').data,mobile=client(r),oldId='SG-1111-2222-3333-4444';
+ mobile.c.saveUsers({'patient-test':{seizguardId:oldId}});
+ mobile.storage.set('seizguard_patient-test_medications',JSON.stringify([{...medication,id:'old-local-only'}]));
+ await mobile.cloud.authenticate('patient-test','482619');
+ assert.equal(mobile.c.loadUsers()['patient-test'].seizguardId,central.patientId);
+ assert.equal(mobile.c.loadUsers()['__legacy__patient-test'].seizguardId,oldId);
+ assert.equal(mobile.storage.has('seizguard_patient-test_medications'),true);
+ assert.equal(request(r,central,'patient.state').data.medications.length,0);
+});
+test('temporary backend contention is retried without repeating an accepted registration',async()=>{
+ const r=runtime(),mobile=client(r),original=mobile.c.fetch;let busy=2,registrations=0;
+ mobile.c.setTimeout=callback=>{callback();return 1;};
+ mobile.c.fetch=async(url,options)=>{
+  const action=JSON.parse(options.body).action;
+  if(action==='patient.auth.parameters'&&busy>0){busy--;return {json:async()=>({ok:false,error:'ระบบกำลังใช้งาน กรุณาลองใหม่'})};}
+  if(action==='patient.auth.register')registrations++;
+  return original(url,options);
+ };
+ await mobile.cloud.authenticate('new-mobile-user','482619',true);
+ assert.equal(registrations,1);
+ assert.equal(busy,0);
+});
 test('legacy client migration carries local records to a new device without changing its matched ID',async()=>{
  const r=runtime(),a=client(r),b=client(r),pid='SG-AAAA-BBBB-CCCC-DDDD',patientToken='a'.repeat(64),salt='ab'.repeat(16);
  r.api.handle({action:'patient.enroll',patientId:pid,patientToken});

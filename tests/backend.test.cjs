@@ -15,6 +15,25 @@ test('server auth, approval, immediate revocation, identity isolation and valida
  assert.equal(call({action:'admin.access.list',session:clinician}).ok,false);call({action:'admin.access.approve',session,id:created.id,approved:false});assert.equal(call({action:'admin.patient',session:clinician,patientId:pid}).ok,false);
 });
 test('30-minute lead across midnight and exact five-minute send window',()=>{const r=runtime(),m={times:['00:15']};assert.equal(r.api.dueSlots(m,30,Date.parse('2026-11-07T23:45:00+07:00')).length,1);assert.equal(r.api.dueSlots(m,30,Date.parse('2026-11-07T23:50:00+07:00')).length,0);});
+test('patient login bootstrap stays available while a different request owns the write lock',()=>{
+ const r=runtime();r.context.LockService={getScriptLock:()=>({tryLock:()=>false,releaseLock(){}})};
+ assert.equal(r.api.handle({action:'health'}).ok,true);
+ assert.equal(r.api.handle({action:'patient.auth.parameters',username:'test-user'}).ok,true);
+ const blocked=r.api.handle({action:'patient.auth.login',username:'test-user',proof:'a'.repeat(64)});
+ assert.equal(blocked.code,'BUSY');
+});
+test('Push network calls release the patient login lock and successful reminders stay deduplicated',()=>{
+ const r=runtime(),fixed=Date.parse('2026-11-07T07:30:30+07:00');
+ r.context.Date=class extends Date{static now(){return fixed;}constructor(...args){super(...(args.length?args:[fixed]));}};
+ assert.equal(r.api.handle({action:'patient.enroll',patientId:pid,patientToken}).ok,true);
+ r.book.getSheetByName('SG_Medications').data.push(['test-med',JSON.stringify({id:'test-med',patientId:pid,name:'Synthetic medicine',dosage:'TEST DATA',times:['08:00'],active:true})]);
+ r.book.getSheetByName('SG_Subscriptions').data.push(['test-sub',JSON.stringify({id:'test-sub',patientId:pid,endpoint:'https://fcm.googleapis.com/fcm/send/test',active:true})]);
+ let held=false,sends=0;r.context.LockService={getScriptLock:()=>({tryLock:()=>{if(held)return false;held=true;return true;},releaseLock(){held=false;}})};
+ r.context.UrlFetchApp={fetch:()=>{assert.equal(held,false);sends++;return {getResponseCode:()=>201};}};
+ r.api.sendReminders();r.api.sendReminders();
+ assert.equal(sends,1);
+ assert.equal(JSON.parse(r.book.getSheetByName('SG_Sent').data[1][1]).status,'sent');
+});
 test('adherence includes unreported scheduled doses, excludes future doses and deduplicates reports',()=>{const r=runtime(),meds=[{id:'m1',times:['08:00','20:00'],startedAt:'2026-11-06T00:00:00+07:00'}],events=[{type:'dose',medicationId:'m1',date:'2026-11-06',time:'08:00',status:'taken'},{type:'dose',medicationId:'m1',date:'2026-11-06',time:'08:00',status:'taken'},{type:'dose',medicationId:'m1',date:'2026-11-06',time:'20:00',status:'taken'}];const a=r.api.calculateAdherence(meds,events,Date.parse('2026-11-07T10:00:00+07:00'));assert.equal(a.expected,3);assert.equal(a.taken,2);assert.equal(a.missing,1);assert.equal(a.percent,67);});
 test('patient enrollment requires a clinic-matched identity',()=>{const r=runtime();assert.equal(r.api.handle({action:'patient.enroll',patientId:'SG-1111-2222-3333-4444',patientToken}).ok,false);});
 test('owner rotation invalidates old code and existing sessions',()=>{const r=runtime(),call=b=>r.api.handle(b);const session=call({action:'admin.login',adminCode:r.key,patientId:pid}).data.session;assert.equal(call({action:'admin.owner.rotate',currentCode:r.key,newCode:'demo5'}).ok,true);assert.equal(call({action:'admin.login',adminCode:r.key,patientId:pid}).ok,false);assert.equal(call({action:'admin.patient',session,patientId:pid}).ok,false);assert.equal(call({action:'admin.login',adminCode:'demo5',patientId:pid}).ok,true);});

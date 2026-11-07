@@ -4,8 +4,13 @@ window.SeizGuardCloud=(()=>{
  const normalize=value=>value.trim().normalize('NFKC').toLowerCase();
  async function publicRequest(action,data={}){
    const endpoint=window.SEIZGUARD_CLOUD?.endpoint;if(!endpoint)throw new Error('ยังไม่ได้เชื่อมส่วนกลาง');
-   const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),credentials:'omit',cache:'no-store',signal:typeof AbortSignal.timeout==='function'?AbortSignal.timeout(25000):undefined});
-   const result=await r.json();if(!result.ok){const e=new Error(result.error||'เชื่อมต่อไม่สำเร็จ');e.code=result.code;throw e;}return result.data;
+   const body=JSON.stringify({action,...data});
+   for(let attempt=0;attempt<3;attempt++){
+     const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body,credentials:'omit',cache:'no-store',signal:typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?AbortSignal.timeout(25000):undefined});
+     const result=await r.json();if(result.ok)return result.data;
+     if((result.code==='BUSY'||result.error==='ระบบกำลังใช้งาน กรุณาลองใหม่')&&attempt<2){await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));continue;}
+     const e=new Error(result.error||'เชื่อมต่อไม่สำเร็จ');e.code=result.code;throw e;
+   }
  }
  function request(action,data={}){const a=loadUsers()[currentUser];if(!a?.cloudAccount||!a.cloudToken)throw new Error('กรุณาเข้าสู่ระบบผู้ป่วยอีกครั้ง');return publicRequest(action,{patientId:a.seizguardId,patientToken:a.cloudToken,...data});}
  function setStatus(message){const el=document.getElementById('cloudStatus');if(el)el.textContent=message;}
@@ -52,16 +57,20 @@ window.SeizGuardCloud=(()=>{
    const name=normalize(rawName),users=loadUsers(),localKey=legacyName||Object.keys(users).find(k=>normalize(k)===name&&!users[k].cloudAccount),legacy=localKey&&users[localKey];
    if(!/^[\p{L}\p{M}\p{N}._-]{3,40}$/u.test(name)){const e=new Error('ชื่อผู้ใช้ต้องมี 3–40 ตัว ใช้ตัวอักษร ตัวเลข จุด ขีดกลาง หรือขีดล่าง โดยไม่มีช่องว่าง');e.code='USERNAME_INVALID';if(legacy)e.legacyName=localKey;throw e;}
    if(!/^\d{6}$/.test(pin))throw new Error('PIN ต้องเป็นตัวเลข 6 หลัก');
-   if(legacy){if(!legacy.pinSalt||!legacy.pinHash)throw new Error('บัญชีเก่านี้ยังไม่มี PIN ที่ตรวจสอบได้ กรุณาติดต่อผู้ดูแล');if(await hashPin(pin,legacy.pinSalt)!==legacy.pinHash)throw new Error('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');}
+   const migrating=!!(legacy?.pinSalt&&legacy?.pinHash);
+   if(legacyName&&!migrating)throw new Error('บัญชีเก่านี้ไม่มี PIN ที่ตรวจสอบได้ จึงย้ายข้อมูลเดิมไม่ได้');
+   if(migrating&&await hashPin(pin,legacy.pinSalt)!==legacy.pinHash)throw new Error('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');
    const params=await publicRequest('patient.auth.parameters',{username:name}),proof=await hashPin(pin,params.salt);let auth;
-   if(legacy&&!legacy.cloudToken){legacy.cloudToken=bytesToHex(crypto.getRandomValues(new Uint8Array(32)));saveUsers(users);}
-   try{auth=await publicRequest(legacy?'patient.auth.migrate':register?'patient.auth.register':'patient.auth.login',{username:name,proof,...(legacy?{patientId:legacy.seizguardId,patientToken:legacy.cloudToken}:{})});}
-   catch(e){if(legacy&&e.code==='USERNAME_TAKEN')e.legacyName=localKey;throw e;}
-   stop();if(legacy)moveLocalData(localKey,auth.patientId);if(localKey&&localKey!==auth.username)delete users[localKey];
+   if(migrating&&!legacy.cloudToken){legacy.cloudToken=bytesToHex(crypto.getRandomValues(new Uint8Array(32)));saveUsers(users);}
+   try{auth=await publicRequest(migrating?'patient.auth.migrate':register?'patient.auth.register':'patient.auth.login',{username:name,proof,...(migrating?{patientId:legacy.seizguardId,patientToken:legacy.cloudToken}:{})});}
+   catch(e){if(migrating&&e.code==='USERNAME_TAKEN')e.legacyName=localKey;throw e;}
+   stop();if(migrating)moveLocalData(localKey,auth.patientId);
+   if(legacy&&!migrating)users['__legacy__'+localKey]={...legacy,archivedUsername:localKey};
+   if(localKey&&localKey!==auth.username)delete users[localKey];
    users[auth.username]={seizguardId:auth.patientId,cloudToken:auth.patientToken,cloudAccount:true,expiresAt:auth.expiresAt};saveUsers(users);
-   currentUser=auth.username;localStorage.setItem('seizguard_currentUser',currentUser);if(legacy)seedLegacy();
+   currentUser=auth.username;localStorage.setItem('seizguard_currentUser',currentUser);if(migrating)seedLegacy();
    // Hydrate before rendering. A blank new device must never replace the existing plan.
-   await sync();return {migrated:!!legacy};
+   await sync();return {migrated:migrating};
  }
  async function sync(){
    if(!currentUser)return;if(inflight)return inflight;const activeUser=currentUser,runGeneration=generation;
