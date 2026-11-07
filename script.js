@@ -310,6 +310,17 @@ function getSeizGuardIdForCurrentUser() {
   return account.seizguardId;
 }
 
+async function copySeizGuardId() {
+  const id = getSeizGuardIdForCurrentUser();
+  if (!id) return;
+  try {
+    await navigator.clipboard.writeText(id);
+    showToast('คัดลอกรหัส SeizGuard แล้ว');
+  } catch (_) {
+    showToast('กรุณาเก็บภาพรหัส SeizGuard ในหน้าโปรไฟล์');
+  }
+}
+
 function bytesToHex(bytes) {
   return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -1179,7 +1190,8 @@ function renderProfile() {
     <div class="detail-card">
       <h4>รหัส SeizGuard ของคุณ</h4>
       <p style="font-size:20px;font-weight:700;letter-spacing:1px;color:var(--primary);margin:8px 0">${seizGuardId || 'ยังไม่กำหนด'}</p>
-      <p style="font-size:12px;color:var(--text3);margin:0">ใช้รหัสนี้เชื่อมบันทึกในแอป รหัสนี้ไม่ใช่ชื่อหรือ HN และไม่ใช่ PIN สำหรับเข้าสู่ระบบ</p>
+      <button type="button" class="btn-primary" onclick="copySeizGuardId()"><i class="fas fa-copy"></i> คัดลอกรหัส</button>
+      <p style="font-size:12px;color:var(--text3);margin:12px 0 0">แสดงรหัสนี้ให้พยาบาลในวันลงทะเบียน เพื่อจับคู่กับทะเบียนของห้องตรวจ ใช้รหัสเดิมทุกครั้ง และเก็บภาพรหัสไว้ก่อนเปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์</p>
     </div>`);
 }
 
@@ -1296,7 +1308,7 @@ document.querySelectorAll('.modal').forEach(modal => {
 
 /* ===== GOOGLE FORM / SHEETS INTEGRATION ===== */
 const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdBIUKyfV-B3wyOnLs6D6zfH8DgbIrkqaE-7Mx6c7zQqLsxHg/formResponse';
-const GOOGLE_FORM_RESPONSES_ENABLED = false; // Keep off while the form is an unpublished draft.
+const GOOGLE_FORM_RESPONSES_ENABLED = true;
 
 const FORM_FIELDS = Object.freeze({
   seizguardId: 'entry.116504668',
