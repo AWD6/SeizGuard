@@ -1,3 +1,5 @@
+import { gcm } from '@noble/ciphers/aes';
+import { hkdf } from '@noble/hashes/hkdf';
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 
@@ -199,13 +201,13 @@ export function dispatch(b){
    return patientState(p);
  }
  if(b.action==='patient.subscribe'){
-   const endpoint=text(b.subscription?.endpoint,2000);if(!validPushEndpoint(endpoint))fail('ปลายทาง Push ไม่ถูกต้อง');const lead=Number(b.leadMinutes);if(![0,5,10,15,30,60].includes(lead))fail('เวลาเตือนไม่ถูกต้อง');put('Patients',p.id,{...p,leadMinutes:lead});const id=hmac(endpoint);put('Subscriptions',id,{patientId:p.id,sessionId:hmac(b.patientToken),endpoint,active:true,updatedAt:new Date().toISOString()});return {subscribed:true};
+   const endpoint=text(b.subscription?.endpoint,2000);if(!validPushEndpoint(endpoint))fail('ปลายทาง Push ไม่ถูกต้อง');const lead=Number(b.leadMinutes);if(![0,5,10,15,30,60].includes(lead))fail('เวลาเตือนไม่ถูกต้อง');put('Patients',p.id,{...p,leadMinutes:lead});const id=hmac(endpoint);const keys=pushKeys(b.subscription?.keys);put('Subscriptions',id,{keys,patientId:p.id,sessionId:hmac(b.patientToken),endpoint,active:true,updatedAt:new Date().toISOString()});return {subscribed:true};
  }
  if(b.action==='patient.unsubscribe'){const endpoint=text(b.endpoint,2000),s=find('Subscriptions',hmac(endpoint));if(s&&s.patientId===p.id)put('Subscriptions',s.id,{...s,active:false});return {};}
  if(b.action==='patient.testPush'){
    const endpoint=text(b.endpoint,2000),s=find('Subscriptions',hmac(endpoint));if(!s||!s.active||s.patientId!==p.id)fail('เปิดแจ้งเตือนเครื่องนี้ก่อนทดสอบ');
    const cache=CacheService.getScriptCache(),limit='push-test:'+p.id;if(cache.get(limit))fail('รอหนึ่งนาทีก่อนทดสอบซ้ำ');cache.put(limit,'1',60);
-   const r=UrlFetchApp.fetch(endpoint,{method:'post',headers:{Authorization:vapidAuthorization(endpoint),TTL:'120',Urgency:'high'},muteHttpExceptions:true});const status=r.getResponseCode();if(status<200||status>=300)fail('บริการ Push ยังไม่รับคำขอ ('+status+')');return {accepted:true};
+   const med=records('Medications').find(m=>m.patientId===p.id&&m.active);const r=sendPush(s,med?reminderMessage(med,med.times[0],true):{title:'SeizGuard · ทดสอบการแจ้งเตือน',body:'ยังไม่มีแผนยาในบัญชีนี้'});const status=r.getResponseCode();if(status<200||status>=300)fail('บริการ Push ยังไม่รับคำขอ ('+status+')');return {accepted:true};
  }
  fail('ไม่พบคำสั่ง');
 }
@@ -216,6 +218,23 @@ export function vapidAuthorization(endpoint,now=Date.now()){
  if(!validPushEndpoint(endpoint))fail('ปลายทาง Push ไม่ถูกต้อง');const aud=/^https:\/\/[^/]+/.exec(endpoint)[0];
  const head=b64(utf8(JSON.stringify({typ:'JWT',alg:'ES256'}))),body=b64(utf8(JSON.stringify({aud,exp:Math.floor(now/1000)+3600,sub:'https://awd6.github.io/SeizGuard/'})));
  const data=head+'.'+body;const sig=p256.sign(sha256(utf8(data)),props().getProperty('VAPID_PRIVATE')).toCompactRawBytes();return 'vapid t='+data+'.'+b64(sig)+', k='+props().getProperty('VAPID_PUBLIC');
+}
+const concat=(...parts)=>{const out=new Uint8Array(parts.reduce((n,p)=>n+p.length,0));let at=0;for(const p of parts){out.set(p,at);at+=p.length;}return out;};
+function decode64(s){if(typeof s!=='string'||s.length>200)fail('กุญแจ Push ไม่ถูกต้อง');return new Uint8Array(Utilities.base64DecodeWebSafe(s).map(b=>(b+256)%256));}
+function pushKeys(keys){if(!keys)return null;const pub=decode64(keys.p256dh),auth=decode64(keys.auth);if(pub.length!==65||pub[0]!==4||auth.length!==16)fail('กุญแจ Push ไม่ถูกต้อง');p256.ProjectivePoint.fromHex(pub);return {p256dh:keys.p256dh,auth:keys.auth};}
+export function reminderMessage(med,time,test=false){return {title:'ใกล้ถึงเวลารับประทานยาของท่านแล้ว',body:(test?'[ทดสอบ]\n':'')+'ชื่อยา: '+med.name+'\nเวลา: '+time+' น.\nขนาด/วิธีรับประทาน: '+med.dosage,tag:'seizguard-'+med.id+'-'+time};}
+export function encryptPush(keys,message){
+ const ua=decode64(keys.p256dh),auth=decode64(keys.auth);let secret;do{secret=sha256(utf8(token()));}while(!p256.utils.isValidPrivateKey(secret));
+ const pub=p256.getPublicKey(secret,false),shared=p256.getSharedSecret(secret,ua,true).slice(1),salt=sha256(utf8(token())).slice(0,16);
+ const ikm=hkdf(sha256,shared,auth,concat(utf8('WebPush: info\0'),ua,pub),32);
+ const key=hkdf(sha256,ikm,salt,utf8('Content-Encoding: aes128gcm\0'),16),nonce=hkdf(sha256,ikm,salt,utf8('Content-Encoding: nonce\0'),12);
+ const plain=concat(utf8(JSON.stringify(message)),new Uint8Array([2]));if(plain.length>3900)fail('ข้อความแจ้งเตือนยาวเกินไป');
+ return concat(salt,new Uint8Array([0,0,16,0,65]),pub,gcm(key,nonce).encrypt(plain));
+}
+function sendPush(sub,message){
+ const headers={Authorization:vapidAuthorization(sub.endpoint),TTL:'120',Urgency:'high'};const options={method:'post',headers,muteHttpExceptions:true};
+ if(sub.keys){headers['Content-Encoding']='aes128gcm';options.contentType='application/octet-stream';options.payload=Array.from(encryptPush(sub.keys,message),b=>b>127?b-256:b);}
+ return UrlFetchApp.fetch(sub.endpoint,options);
 }
 export function dueSlots(med,lead,now){
  const date=Utilities.formatDate(new Date(now),'Asia/Bangkok','yyyy-MM-dd');const start=Date.parse(date+'T00:00:00+07:00');const out=[];
@@ -228,7 +247,7 @@ export function sendReminders(){
  try{const now=Date.now(),patients=records('Patients'),meds=records('Medications').filter(m=>m.active),events=records('Events'),sent=new Set(records('Sent').filter(s=>now-s.at<7*86400000).map(s=>s.id));
  for(const sub of records('Subscriptions').filter(s=>s.active)){const p=patients.find(p=>p.id===sub.patientId);if(!p)continue;for(const med of meds.filter(m=>m.patientId===p.id))for(const slot of dueSlots(med,p.leadMinutes??30,now)){
  const key=sub.id+':'+med.id+':'+slot.date+':'+slot.time;if(sent.has(key)||events.some(e=>e.patientId===p.id&&e.medicationId===med.id&&e.type==='dose'&&e.date===slot.date&&e.time===slot.time&&e.status==='taken'))continue;
- const r=UrlFetchApp.fetch(sub.endpoint,{method:'post',headers:{Authorization:vapidAuthorization(sub.endpoint),TTL:'120',Urgency:'high'},muteHttpExceptions:true});const status=r.getResponseCode();if(status>=200&&status<300){put('Sent',key,{at:now});sent.add(key);}else if([404,410].includes(status))put('Subscriptions',sub.id,{...sub,active:false});
+ const r=sendPush(sub,reminderMessage(med,slot.time));const status=r.getResponseCode();if(status>=200&&status<300){put('Sent',key,{at:now});sent.add(key);}else if([404,410].includes(status))put('Subscriptions',sub.id,{...sub,active:false});
  }} }finally{lock.releaseLock();}
 }
 export function handle(body){recordCache={};cachedBook=null;const lock=LockService.getScriptLock();if(!lock.tryLock(20000))return {ok:false,error:'ระบบกำลังใช้งาน กรุณาลองใหม่'};try{return {ok:true,data:dispatch(body)};}catch(e){return {ok:false,error:e.message,...(e.code?{code:e.code}:{})};}finally{lock.releaseLock();}}
