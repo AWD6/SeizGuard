@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b666c">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="pill-icon-180.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=accounts-2">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E💊%3C/text%3E%3C/svg%3E">
@@ -25,12 +25,12 @@
       <div class="login-form">
         <div class="input-group">
           <i class="fas fa-user"></i>
-          <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้ (ไม่ใช้ชื่อจริง)" autocomplete="username">
+          <input type="text" id="loginUsername" aria-label="ชื่อผู้ใช้" placeholder="ชื่อผู้ใช้ (ไม่ใช้ชื่อจริง)" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="100">
         </div>
 
         <div class="input-group">
           <i class="fas fa-lock"></i>
-          <input type="password" id="loginPIN" placeholder="PIN 6 หลัก" autocomplete="current-password" inputmode="numeric" maxlength="6">
+          <input type="password" id="loginPIN" aria-label="PIN 6 หลัก" placeholder="PIN 6 หลัก" autocomplete="current-password" inputmode="numeric" maxlength="6">
         </div>
         <button class="btn-primary btn-large" onclick="handleLogin()">
           <i class="fas fa-sign-in-alt"></i> เข้าสู่ระบบ
@@ -38,6 +38,9 @@
         <button class="btn-outline btn-large" onclick="handleRegister()">
           <i class="fas fa-user-plus"></i> ลงทะเบียนผู้ใช้ใหม่
         </button>
+        <button class="btn-outline btn-large" id="migrateAccountButton" onclick="handleMigrateAccount()" hidden>ย้ายบัญชีเดิมด้วยชื่อใหม่</button>
+        <p class="account-help">ใช้ชื่อผู้ใช้และ PIN เดิมเพื่อดูข้อมูลของตนเองจากเครื่องอื่น<br>ลงทะเบียนใหม่ครั้งเดียว · ใช้อินเทอร์เน็ตเพื่อเข้าสู่ระบบและซิงก์ข้อมูล</p>
+        <p id="patientLoginMessage" class="account-message" role="status" aria-live="polite"></p>
       </div>
       <a href="admin.html" style="color:white;margin-top:18px">เข้าสู่ระบบสำหรับผู้ดูแล</a>
       <p class="login-note">conceived, designed, and Brought to Life by RN.Patipon Wiyo</p>
@@ -66,6 +69,16 @@
         <div class="week-calendar" id="weekCalendar"></div>
       </div>
       <div class="content-scroll">
+        <!-- PWA INSTALL BANNER -->
+        <div id="pwaHomeBanner" class="pwa-install-banner" hidden>
+          <div class="pwa-banner-icon"><i class="fas fa-mobile-screen-button"></i></div>
+          <div class="pwa-banner-text">
+            <strong>สร้างแอป SeizGuard บนหน้าจอโฮม</strong>
+            <p>กดครั้งเดียวเปิดได้ทันที พร้อมรับการแจ้งเตือนเตือนกินยาทุกมื้อ</p>
+          </div>
+          <button type="button" class="btn-install-trigger" onclick="triggerPwaInstall()"><i class="fas fa-plus"></i> เพิ่มลงโฮม</button>
+        </div>
+
         <div class="adherence-card" id="adherenceCard"></div>
         <div class="section-header">
           <i class="fas fa-pills"></i>
@@ -279,10 +292,39 @@
     </div>
   </div>
 
+  <!-- iOS / DESKTOP PWA GUIDE DIALOG -->
+  <dialog id="iosInstallDialog" class="pwa-guide-dialog">
+    <div class="pwa-guide-content">
+      <div class="pwa-guide-header">
+        <img src="pill-icon-192.png" alt="SeizGuard" class="pwa-guide-icon">
+        <h3 id="pwaGuideTitle">วิธีเพิ่ม SeizGuard ลงหน้าจอโฮม (iPhone / iPad)</h3>
+        <button type="button" class="close-guide-btn" onclick="document.getElementById('iosInstallDialog').close()">✕</button>
+      </div>
+      <div class="pwa-guide-body">
+        <div class="guide-step">
+          <div class="step-badge">1</div>
+          <div class="step-desc">แตะปุ่ม <strong>แชร์ (Share)</strong> <i class="fas fa-arrow-up-from-bracket" style="color:var(--primary)"></i> ที่แถบเครื่องมือด้านล่างของ Safari</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-badge">2</div>
+          <div class="step-desc">เลื่อนเมนูลงมา แล้วแตะเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong> <i class="fas fa-square-plus" style="color:var(--primary)"></i></div>
+        </div>
+        <div class="guide-step">
+          <div class="step-badge">3</div>
+          <div class="step-desc">แตะ <strong>"เพิ่ม" (Add)</strong> ที่มุมบนขวา จะมีไอคอนแอป SeizGuard บนหน้าจอโฮมทันที</div>
+        </div>
+      </div>
+      <div class="guide-tip">
+        <i class="fas fa-bell" style="color:#e67e22"></i> เมื่อเปิดแอปจากไอคอนหน้าจอโฮม อุปกรณ์จะสามารถส่งเสียงและการแจ้งเตือนเตือนกินยาได้ครบถ้วน
+      </div>
+      <button type="button" class="btn-primary" style="width:100%" onclick="document.getElementById('iosInstallDialog').close()">เข้าใจแล้ว</button>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast"></div>
 
   <script src="cloud-config.js"></script>
-  <script src="script.js"></script>
-  <script src="patient-cloud.js"></script>
+  <script src="script.js?v=accounts-2"></script>
+  <script src="patient-account.js?v=accounts-2"></script>
 </body>
 </html>

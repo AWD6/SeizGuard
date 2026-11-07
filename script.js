@@ -261,9 +261,9 @@ function getDateStr(d) {
 }
 function getTimeStr() { const n=new Date(); return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0'); }
 
-function userKey(key) { return `seizguard_${currentUser}_${key}`; }
+function userKey(key) { const a=loadUsers()[currentUser]; return a?.cloudAccount ? `seizguard_patient_${a.seizguardId}_${key}` : `seizguard_${currentUser}_${key}`; }
 function getData(key) { try { return JSON.parse(localStorage.getItem(userKey(key))) || []; } catch { return []; } }
-function setData(key, val) { localStorage.setItem(userKey(key), JSON.stringify(val)); window.SeizGuardCloud?.changed(); }
+function setData(key, val) { const previous = getData(key), value = JSON.stringify(val); if (JSON.stringify(previous) === value) return; window.SeizGuardCloud?.recordChange(key, previous, val); localStorage.setItem(userKey(key), value); window.SeizGuardCloud?.changed(); }
 function getObj(key) { try { return JSON.parse(localStorage.getItem(userKey(key))); } catch { return null; } }
 function setObj(key, val) { localStorage.setItem(userKey(key), JSON.stringify(val)); }
 
@@ -275,8 +275,8 @@ function showToast(msg) {
 }
 
 function loadUsers() {
-  try { return JSON.parse(localStorage.getItem('seizguard_users') || '{}') || {}; }
-  catch (_) { return {}; }
+  try { const users=JSON.parse(localStorage.getItem('seizguard_users') || '{}'); return users && typeof users==='object' && !Array.isArray(users) ? Object.assign(Object.create(null),users) : Object.create(null); }
+  catch (_) { return Object.create(null); }
 }
 
 function saveUsers(users) {
@@ -379,105 +379,39 @@ function purgeLegacyPatientIdentifiers() {
 }
 
 /* ===== AUTH ===== */
-async function handleLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
+let migrationSource = null;
+async function submitPatientAuth(register = false, migrate = false) {
+  const name = document.getElementById('loginUsername').value.trim();
   const pin = document.getElementById('loginPIN').value.trim();
-
-  if (!username || !pin) {
-    showToast('กรุณากรอกชื่อผู้ใช้และ PIN');
-    return;
-  }
-  if (!/^\d{6}$/.test(pin)) {
-    showToast('PIN ต้องเป็นตัวเลข 6 หลัก');
-    return;
-  }
-
-  const users = loadUsers();
-  const account = users[username];
-  if (!account) {
-    showToast('ไม่พบผู้ใช้นี้ กรุณาลงทะเบียนก่อน');
-    return;
-  }
-
+  const message = document.getElementById('patientLoginMessage');
+  const buttons = document.querySelectorAll('.login-form button');
+  if (!name || !pin) { message.textContent = 'กรุณากรอกชื่อผู้ใช้และ PIN'; return; }
+  message.textContent = 'กำลังตรวจบัญชีและดึงข้อมูล…';
+  buttons.forEach(b => b.disabled = true);
   try {
-    let accountChanged = false;
-    if (account.pinSalt && account.pinHash) {
-      if (await hashPin(pin, account.pinSalt) !== account.pinHash) {
-        showToast('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');
-        return;
-      }
-    } else {
-      // Upgrade an existing local account that used HN as its second login field.
-      account.pinSalt = createPinSalt();
-      account.pinHash = await hashPin(pin, account.pinSalt);
-      delete account.hn;
-      accountChanged = true;
-    }
-    if (!account.seizguardId) {
-      account.seizguardId = createSeizGuardId(users);
-      accountChanged = true;
-    }
-    if (accountChanged) {
-      users[username] = account;
-      saveUsers(users);
-    }
-
-    currentUser = username;
-    localStorage.setItem('seizguard_currentUser', username);
+    const result = await window.SeizGuardCloud.authenticate(name, pin, register, migrate ? migrationSource : null);
+    migrationSource = null;
+    document.getElementById('migrateAccountButton').hidden = true;
+    document.getElementById('loginPIN').value = '';
     purgeLegacyPatientIdentifiers();
+    message.textContent = '';
     enterApp();
+    showToast(result.migrated ? 'ย้ายบัญชีสำเร็จ ใช้ชื่อผู้ใช้และ PIN นี้บนเครื่องอื่นได้แล้ว' : register ? 'ลงทะเบียนสำเร็จ' : 'เข้าสู่ระบบแล้ว');
   } catch (error) {
-    console.error('Login error:', error);
-    showToast('ต้องเปิดแอปผ่าน HTTPS หรือ localhost เพื่อใช้ PIN อย่างปลอดภัย');
-  }
+    message.textContent = error.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วลองใหม่' : error.message;
+    if (error.legacyName) {
+      migrationSource = error.legacyName;
+      document.getElementById('migrateAccountButton').hidden = false;
+      message.textContent += ' · ข้อมูลเดิมยังอยู่ กรุณาแก้ช่องชื่อผู้ใช้เป็นชื่อใหม่ แล้วกด “ย้ายบัญชีเดิมด้วยชื่อใหม่” โดยใช้ PIN เดิม';
+    }
+  } finally { buttons.forEach(b => b.disabled = false); }
 }
-
-async function handleRegister() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const pin = document.getElementById('loginPIN').value.trim();
-
-  if (!username || !pin) {
-    showToast('กรุณากรอกชื่อผู้ใช้และ PIN');
-    return;
-  }
-  if (username.length < 3) {
-    showToast('ชื่อผู้ใช้ต้องมีอย่างน้อย 3 ตัวอักษร');
-    return;
-  }
-  if (!/^\d{6}$/.test(pin)) {
-    showToast('PIN ต้องเป็นตัวเลข 6 หลัก');
-    return;
-  }
-
-  const users = loadUsers();
-  const existing = users[username];
-  if (existing && existing.pinSalt && existing.pinHash) {
-    showToast('ชื่อผู้ใช้นี้ถูกใช้แล้ว');
-    return;
-  }
-
-  try {
-    const account = existing && typeof existing === 'object' ? existing : {};
-    account.pinSalt = createPinSalt();
-    account.pinHash = await hashPin(pin, account.pinSalt);
-    if (!account.seizguardId) account.seizguardId = createSeizGuardId(users);
-    delete account.hn;
-    users[username] = account;
-    saveUsers(users);
-
-    currentUser = username;
-    localStorage.setItem('seizguard_currentUser', username);
-    purgeLegacyPatientIdentifiers();
-    showToast('ลงทะเบียนสำเร็จ!');
-    enterApp();
-  } catch (error) {
-    console.error('Registration error:', error);
-    showToast('ต้องเปิดแอปผ่าน HTTPS หรือ localhost เพื่อใช้ PIN อย่างปลอดภัย');
-  }
-}
+async function handleLogin() { return submitPatientAuth(); }
+async function handleRegister() { return submitPatientAuth(true); }
+async function handleMigrateAccount() { return submitPatientAuth(false, true); }
 
 async function handleLogout() {
-  try { await window.SeizGuardCloud?.logout(); } catch (_) { showToast('ยังปิดแจ้งเตือนไม่สำเร็จ กรุณาลองออกจากระบบอีกครั้ง'); return; }
+  try { await window.SeizGuardCloud?.logout(); } catch (_) { showToast('ออกจากระบบยังไม่สำเร็จ กรุณาเชื่อมอินเทอร์เน็ตเพื่อส่งข้อมูลที่ค้างแล้วลองใหม่'); return; }
   currentUser = null;
   localStorage.removeItem('seizguard_currentUser');
   document.getElementById('mainApp').classList.remove('active');
@@ -721,6 +655,7 @@ function showMedDetail(medId) {
 
   const thaiName = getThaiName(med.name);
   document.getElementById('medDetailTitle').textContent = med.name;
+  document.getElementById('deleteMedBtn').hidden = med.source === 'clinician';
   document.getElementById('deleteMedBtn').onclick = () => {
     if (confirm('ต้องการลบ ' + med.name + ' หรือไม่?')) {
       const ms = getData('medications').filter(m => m.id !== medId);
@@ -1200,9 +1135,10 @@ function renderProfile() {
   document.getElementById('profileContent').insertAdjacentHTML('afterbegin', `
     <div class="detail-card">
       <h4>รหัส SeizGuard ของคุณ</h4>
+      <p style="font-size:13px;color:var(--text2)">ชื่อผู้ใช้: ${escapeHTML(currentUser || '')}</p>
       <p style="font-size:20px;font-weight:700;letter-spacing:1px;color:var(--primary);margin:8px 0">${seizGuardId || 'ยังไม่กำหนด'}</p>
-      <button type="button" class="btn-primary" onclick="copySeizGuardId()"><i class="fas fa-copy"></i> คัดลอกรหัส</button>
-      <p style="font-size:12px;color:var(--text3);margin:12px 0 0">แสดงรหัสนี้ให้พยาบาลในวันลงทะเบียน เพื่อจับคู่กับทะเบียนของห้องตรวจ ใช้รหัสเดิมทุกครั้ง และเก็บภาพรหัสไว้ก่อนเปลี่ยนเครื่องหรือล้างข้อมูลเบราว์เซอร์</p>
+      <button type="button" class="btn-copy-id" onclick="copySeizGuardId()"><i class="fas fa-copy"></i> คัดลอกรหัส</button>
+      <p style="font-size:12px;color:var(--text3);margin:12px 0 0">แสดงรหัสนี้ให้พยาบาลเพื่อจับคู่กับทะเบียนของห้องตรวจ เข้าสู่ระบบเครื่องอื่นด้วยชื่อผู้ใช้และ PIN เดิม จะได้รหัสและแผนยาเดิม</p>
     </div>`);
 }
 
@@ -1295,17 +1231,22 @@ function closeModal(id) {
 }
 
 /* ===== INIT ===== */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   purgeLegacyPatientIdentifiers();
   const saved = localStorage.getItem('seizguard_currentUser');
-  if (saved) {
-    const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
-    if (users[saved]) {
-      currentUser = saved;
-      getSeizGuardIdForCurrentUser();
-      enterApp();
-      return;
-    }
+  const account = saved && loadUsers()[saved];
+  if (account?.cloudAccount && account.cloudToken) {
+    currentUser = saved;
+    document.querySelectorAll('.login-form button').forEach(b => b.disabled = true);
+    document.getElementById('patientLoginMessage').textContent = 'กำลังดึงข้อมูลบัญชี…';
+    const restored=await window.SeizGuardCloud.resume();
+    document.querySelectorAll('.login-form button').forEach(b => b.disabled = false);
+    if (restored) { enterApp(); return; }
+    currentUser = null;
+    document.getElementById('patientLoginMessage').textContent = 'กรุณาเชื่อมอินเทอร์เน็ตแล้วเข้าสู่ระบบอีกครั้ง';
+  } else if (account) {
+    document.getElementById('loginUsername').value = saved;
+    document.getElementById('patientLoginMessage').textContent = 'กรอก PIN เดิมแล้วเข้าสู่ระบบหนึ่งครั้ง เพื่อย้ายบัญชีนี้ให้ใช้ข้ามเครื่องได้';
   }
   document.getElementById('loginScreen').classList.add('active');
 });
@@ -1465,3 +1406,65 @@ function addGoogleSheetButton() {
 window.addEventListener('load', () => {
   setTimeout(addGoogleSheetButton, 500);
 });
+
+/* === PWA INSTALL & HOME SCREEN SHORTCUT === */
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updatePwaInstallState();
+});
+
+function isPwaStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function updatePwaInstallState() {
+  const banner = document.getElementById('pwaHomeBanner');
+  const profileBtn = document.getElementById('btnProfileInstallPwa');
+  if (isPwaStandalone()) {
+    if (banner) banner.hidden = true;
+    if (profileBtn) profileBtn.style.display = 'none';
+    return;
+  }
+  if (banner) banner.hidden = false;
+  if (profileBtn) profileBtn.style.display = 'inline-flex';
+}
+
+async function triggerPwaInstall() {
+  if (isPwaStandalone()) {
+    showToast('แอปติดตั้งบนหน้าจอโฮมเรียบร้อยแล้ว');
+    return;
+  }
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) {
+    const dlg = document.getElementById('iosInstallDialog');
+    if (dlg) dlg.showModal();
+    return;
+  }
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      showToast('✓ เพิ่ม SeizGuard ไปยังหน้าจอโฮมสำเร็จ!');
+      deferredInstallPrompt = null;
+      updatePwaInstallState();
+    }
+  } else {
+    const dlg = document.getElementById('iosInstallDialog');
+    if (dlg) {
+      const title = dlg.querySelector('#pwaGuideTitle');
+      if (title) title.textContent = 'วิธีติดตั้งแอป SeizGuard บนหน้าจอโฮม';
+      dlg.showModal();
+    } else {
+      showToast('กดเมนูของเบราว์เซอร์ แล้วเลือก "ติดตั้งแอป" หรือ "เพิ่มไปยังหน้าจอหลัก"');
+    }
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(updatePwaInstallState, 600);
+});
+
+window.addEventListener('load',()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});});
+window.addEventListener('appinstalled',()=>{deferredInstallPrompt=null;const banner=document.getElementById('pwaHomeBanner');if(banner)banner.hidden=true;});

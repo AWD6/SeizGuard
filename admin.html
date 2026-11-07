@@ -1,12 +1,289 @@
-<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SeizGuard · ผู้ดูแล</title><link rel="stylesheet" href="admin.css"><link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet"></head><body>
-<header><a href="index.html">💊 SeizGuard</a><span>ห้องตรวจพิเศษศัลยกรรม 2</span></header>
-<main><section id="adminLogin" class="login card"><p class="eyebrow">สำหรับผู้ดูแลที่ได้รับอนุมัติ</p><h1>ติดตามผู้ป่วย</h1><p>ค้นหาด้วย SeizGuard ID เพื่อดูแผนยา บันทึกอาการ และนัดหมาย</p><form id="loginForm"><label>รหัส admin<input id="adminCode" type="password" autocomplete="off" required></label><label>SeizGuard ID<input id="patientId" placeholder="SG-XXXX-XXXX-XXXX-XXXX" required autocomplete="off"></label><button>เข้าสู่ระบบผู้ดูแล</button></form><button id="demoButton" class="secondary">ดูตัวอย่างข้อมูลสมมติ</button><p id="loginMessage" role="status"></p><a href="index.html">กลับหน้าแอปผู้ป่วย</a></section>
-<section id="dashboard" hidden><div class="dashboard-top"><div><p class="eyebrow" id="modeLabel"></p><h1>ภาพรวมการดูแล</h1></div><button class="secondary" id="logoutButton">ออกจากระบบ</button></div><form id="searchForm" class="search card"><label>ค้นหา SeizGuard ID<input id="searchId" required></label><button>ค้นหา</button></form><p id="dashboardMessage" role="status"></p>
-<div class="identity card"><div><p class="eyebrow">ผู้ป่วย</p><h2 id="patientName"></h2><p id="patientHn"></p></div><div><span class="pill" id="displayId"></span><p id="connectionStatus"></p></div></div>
-<div class="stats"><article class="card"><span>การกินยา 7 วัน</span><strong id="adherenceValue"></strong><p id="adherenceDetail"></p></article><article class="card"><span>บันทึกอาการชัก</span><strong id="seizureCount"></strong><p>เฉพาะรายการที่ส่งเข้าระบบ</p></article><article class="card"><span>รายงานอาการข้างเคียง</span><strong id="effectCount"></strong><p>ต้องแยกจากประวัติแพ้ยาที่ยืนยันแล้ว</p></article><article class="card"><span>นัดครั้งถัดไป</span><strong id="appointmentValue"></strong><p>วันนัดที่ผู้ดูแลกำหนด</p></article></div>
-<div class="columns"><section class="card"><div class="section-top"><h2>แผนยา</h2><button id="addMedicationButton">+ เพิ่มยา</button></div><p>รองรับยากันชักและยารักษาโรคประจำตัวอื่น ตามคำสั่งการรักษา</p><div id="medications"></div></section><section class="card"><h2>นัดหมายและประวัติแพ้ยา</h2><form id="appointmentForm"><label>นัดครั้งถัดไป<input type="date" id="nextAppointment"></label><button>บันทึกวันนัด</button></form><form id="targetForm"><label>เป้าหมายการกินยาที่กำหนดร่วมกับผู้ป่วย (%)<input type="number" id="targetValue" min="1" max="100" required></label><button>บันทึกเป้าหมาย</button></form><form id="allergyForm"><label>ประวัติแพ้ยาที่ผู้ดูแลตรวจยืนยันแล้ว<textarea id="allergies" placeholder="หนึ่งรายการต่อหนึ่งบรรทัด"></textarea></label><button>บันทึกประวัติแพ้ยา</button></form></section></div>
-<section class="card"><h2>บันทึกอาการและการรับประทานยา</h2><div class="scroll-table"><table><thead><tr><th>วันเวลา</th><th>ประเภท</th><th>รายละเอียด</th><th>ระดับที่รายงาน</th></tr></thead><tbody id="events"></tbody></table></div></section>
-<section id="accessPanel" class="card" hidden><h2>ผู้ที่คุณอนุมัติให้เข้าถึง</h2><p>รหัสที่สร้างใหม่จะยังเข้าไม่ได้ จนกว่าคุณจะกดอนุมัติ สามารถเพิกถอนได้ทันที</p><form id="createAdminForm" class="search"><label>ชื่อเรียกผู้ดูแล<input id="newAdminLabel" required></label><button>สร้างรหัสผู้ดูแล</button></form><output id="newAdminCode"></output><div id="adminList"></div></section>
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SeizGuard · ผู้ดูแล</title><link rel="stylesheet" href="admin.css"><link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></head><body>
+<header><a href="index.html">💊 SeizGuard</a><span>ห้องตรวจพิเศษศัลยกรรม 2 · ระบบผู้ดูแล</span></header>
+<main>
+<section id="adminLogin" class="login card">
+  <p class="eyebrow">สำหรับผู้ดูแลที่ได้รับอนุมัติ</p>
+  <h1>ติดตามผู้ป่วย</h1>
+  <p>เข้าสู่ระบบเพื่อดูรายชื่อ เชื่อมโยงข้อมูลผู้ป่วยใหม่เข้ากับทะเบียน และจัดการแผนยา</p>
+  <form id="loginForm">
+    <label>รหัส admin<input id="adminCode" type="password" autocomplete="off" required></label>
+    <label>SeizGuard ID (เว้นว่างได้ เพื่อดูรายชื่อทั้งหมดและเชื่อมผู้ป่วยใหม่)<input id="patientId" placeholder="SG-XXXX-XXXX-XXXX-XXXX" autocomplete="off"></label>
+    <button>เข้าสู่ระบบผู้ดูแล</button>
+  </form>
+  <button id="demoButton" class="secondary">ดูตัวอย่างข้อมูลสมมติ</button>
+  <p id="loginMessage" role="status"></p>
+  <a href="index.html">← กลับหน้าแอปผู้ป่วย</a>
 </section>
-<dialog id="medDialog"><form id="medicationForm"><h2>เพิ่มยาให้ผู้ป่วย</h2><p id="medPatient"></p><label>ชื่อยา<input id="adminMedName" required maxlength="120"></label><label>ขนาดและวิธีรับประทานตามคำสั่งแพทย์<input id="adminMedDosage" required maxlength="120"></label><label>เวลา (คั่นด้วยจุลภาค)<input id="adminMedTimes" placeholder="08:00, 20:00" required></label><p>ผู้ป่วยจะได้รับแผนยาเมื่อแอปเชื่อมต่อ ส่วนกลางแจ้งเตือนก่อนเวลาตามที่ตั้งไว้</p><div class="actions"><button type="button" class="secondary" id="cancelMedication">ยกเลิก</button><button>บันทึกแผนยา</button></div></form></dialog>
-</main><script src="cloud-config.js"></script><script src="admin.js"></script></body></html>
+
+<section id="dashboard" hidden>
+  <div class="dashboard-top">
+    <div>
+      <p class="eyebrow" id="modeLabel"></p>
+      <h1>ภาพรวมการดูแลผู้ป่วยโรคลมชัก</h1>
+    </div>
+    <div class="actions">
+      <a href="https://docs.google.com/spreadsheets/d/1paa2W-LmQBe08_nqpvhBfgz9HEd7Ii-NIT5P-Y8Kg_A/edit?gid=690209229#gid=690209229" target="_blank" rel="noopener" class="sheet-link-btn" title="เปิด Google Sheets ส่วนกลาง"><i class="fas fa-table"></i> เปิด Google Sheet ทะเบียนกลาง</a>
+      <button class="secondary" id="logoutButton">ออกจากระบบ</button>
+    </div>
+  </div>
+
+  <!-- PATIENT LINKING & DIRECTORY SECTION -->
+  <div class="card link-card" id="linkSection">
+    <div class="section-top">
+      <div>
+        <p class="eyebrow"><i class="fas fa-link"></i> เชื่อมโยงข้อมูลส่วนกลาง (Google Sheets)</p>
+        <h2>จับคู่ SeizGuard ID กับ HN และชื่อ-นามสกุล</h2>
+      </div>
+      <span class="sheet-badge"><i class="fas fa-check-circle"></i> บันทึกเข้า Sheet ทะเบียนผู้ป่วย และ SeizGuard_IDs อัตโนมัติ</span>
+    </div>
+    <p>เมื่อผู้ป่วยลงทะเบียนแอป SeizGuard บนโทรศัพท์ เจ้าหน้าที่พิมพ์ข้อมูลด้านล่างแล้วกดบันทึก ข้อมูลจะถูกบันทึกเข้า Google Sheet ทะเบียนกลางโดยอัตโนมัติทันที</p>
+    <form id="linkForm" class="link-grid">
+      <div>
+        <label>SeizGuard ID<input id="linkPatientId" placeholder="SG-XXXX-XXXX-XXXX-XXXX" required autocomplete="off"></label>
+      </div>
+      <div>
+        <label>HN ผู้ป่วย<input id="linkHn" placeholder="เช่น 67012345" required autocomplete="off"></label>
+      </div>
+      <div>
+        <label>ชื่อจริง<input id="linkFirstName" placeholder="เช่น สมชาย" required autocomplete="off"></label>
+      </div>
+      <div>
+        <label>นามสกุล<input id="linkLastName" placeholder="เช่น ใจดี" required autocomplete="off"></label>
+      </div>
+      <div class="link-btn-cell">
+        <button type="submit" id="btnLinkSubmit" class="btn-link-action"><i class="fas fa-link"></i> บันทึกและเชื่อมโยงข้อมูล</button>
+      </div>
+    </form>
+    <p id="linkMessage" role="status"></p>
+  </div>
+
+  <!-- PATIENT DIRECTORY TABLE -->
+  <div class="card" id="directorySection">
+    <div class="section-top">
+      <div>
+        <p class="eyebrow"><i class="fas fa-users"></i> ผู้ลงทะเบียนในระบบ</p>
+        <h2>รายชื่อ SeizGuard ID ทั้งหมด</h2>
+      </div>
+      <div class="actions">
+        <button type="button" class="secondary" id="refreshPatientsBtn"><i class="fas fa-sync-alt"></i> รีเฟรชรายชื่อ</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <span class="filter-label">แสดง:</span>
+      <button type="button" class="filter-chip active" data-filter="all">ทั้งหมด (<span id="countAll">0</span>)</button>
+      <button type="button" class="filter-chip" data-filter="unlinked">รอจับคู่ (<span id="countUnlinked">0</span>)</button>
+      <button type="button" class="filter-chip" data-filter="linked">จับคู่แล้ว (<span id="countLinked">0</span>)</button>
+    </div>
+    <div class="scroll-table">
+      <table id="patientsTable">
+        <thead>
+          <tr>
+            <th>วันที่ลงทะเบียน</th>
+            <th>SeizGuard ID</th>
+            <th>ชื่อผู้ใช้ในแอป</th>
+            <th>สถานะจับคู่</th>
+            <th>HN & ชื่อ-นามสกุล</th>
+            <th>การดำเนินการ</th>
+          </tr>
+        </thead>
+        <tbody id="patientsTableBody">
+          <tr><td colspan="6" style="text-align:center">กำลังโหลดรายชื่อผู้ป่วย…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SEARCH PATIENT -->
+  <form id="searchForm" class="search card">
+    <label>ค้นหา SeizGuard ID เพื่อดูแผนยาและบันทึกอาการ
+      <input id="searchId" placeholder="SG-XXXX-XXXX-XXXX-XXXX" required>
+    </label>
+    <button><i class="fas fa-search"></i> ค้นหา</button>
+  </form>
+  <p id="dashboardMessage" role="status"></p>
+
+  <!-- PATIENT DETAILS CONTAINER -->
+  <div id="patientDetailsArea" hidden>
+    <div class="identity card">
+      <div>
+        <p class="eyebrow">ผู้ป่วยที่กำลังดู</p>
+        <h2 id="patientName"></h2>
+        <p id="patientHn"></p>
+      </div>
+      <div>
+        <span class="pill" id="displayId"></span>
+        <p id="connectionStatus"></p>
+      </div>
+    </div>
+
+    <div class="stats">
+      <article class="card">
+        <span>การกินยา 7 วัน</span>
+        <strong id="adherenceValue"></strong>
+        <p id="adherenceDetail"></p>
+      </article>
+      <article class="card">
+        <span>บันทึกอาการชัก</span>
+        <strong id="seizureCount"></strong>
+        <p>เฉพาะรายการที่ส่งเข้าระบบ</p>
+      </article>
+      <article class="card">
+        <span>รายงานอาการข้างเคียง</span>
+        <strong id="effectCount"></strong>
+        <p>ต้องแยกจากประวัติแพ้ยาที่ยืนยันแล้ว</p>
+      </article>
+      <article class="card">
+        <span>นัดครั้งถัดไป</span>
+        <strong id="appointmentValue"></strong>
+        <p>วันนัดที่ผู้ดูแลกำหนด</p>
+      </article>
+    </div>
+
+    <div class="columns">
+      <section class="card">
+        <div class="section-top">
+          <h2>แผนยา</h2>
+          <button id="addMedicationButton"><i class="fas fa-plus"></i> เพิ่มยา</button>
+        </div>
+        <p>รองรับยากันชักที่พบบ่อยและยารักษาโรคประจำตัวอื่น ตามคำสั่งการรักษา</p>
+        <div id="medications"></div>
+      </section>
+      <section class="card">
+        <h2>นัดหมายและประวัติแพ้ยา</h2>
+        <form id="appointmentForm">
+          <label>นัดครั้งถัดไป<input type="date" id="nextAppointment"></label>
+          <button>บันทึกวันนัด</button>
+        </form>
+        <form id="targetForm">
+          <label>เป้าหมายการกินยาที่กำหนดร่วมกับผู้ป่วย (%)<input type="number" id="targetValue" min="1" max="100" required></label>
+          <button>บันทึกเป้าหมาย</button>
+        </form>
+        <form id="allergyForm">
+          <label>ประวัติแพ้ยาที่ผู้ดูแลตรวจยืนยันแล้ว<textarea id="allergies" placeholder="หนึ่งรายการต่อหนึ่งบรรทัด"></textarea></label>
+          <button>บันทึกประวัติแพ้ยา</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>บันทึกอาการและการรับประทานยา</h2>
+      <div class="scroll-table">
+        <table>
+          <thead>
+            <tr>
+              <th>วันเวลา</th>
+              <th>ประเภท</th>
+              <th>รายละเอียด</th>
+              <th>ระดับที่รายงาน</th>
+            </tr>
+          </thead>
+          <tbody id="events"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section id="accessPanel" class="card" hidden>
+    <h2>ผู้ที่คุณอนุมัติให้เข้าถึง</h2>
+    <p>รหัสที่สร้างใหม่จะยังเข้าไม่ได้ จนกว่าคุณจะกดอนุมัติ สามารถเพิกถอนได้ทันที</p>
+    <form id="createAdminForm" class="search">
+      <label>ชื่อเรียกผู้ดูแล<input id="newAdminLabel" required></label>
+      <button>สร้างรหัสผู้ดูแล</button>
+    </form>
+    <output id="newAdminCode"></output>
+    <div id="adminList"></div>
+  </section>
+</section>
+
+<!-- DIALOG: ADD MEDICATION WITH PRESETS -->
+<dialog id="medDialog">
+  <form id="medicationForm">
+    <div class="dialog-header">
+      <h2><i class="fas fa-pills" style="color:#0b747a"></i> เพิ่มยาให้ผู้ป่วย</h2>
+      <button type="button" class="close-dialog-btn" onclick="$('medDialog').close()">✕</button>
+    </div>
+    <p id="medPatient" class="med-patient-tag"></p>
+
+    <div class="preset-box">
+      <label for="medPreset"><i class="fas fa-magic" style="color:#e67e22"></i> <strong>แม่แบบยากันชัก: ตรวจขนาดยา รูปแบบยา และเวลาให้ตรงใบสั่งแพทย์ก่อนบันทึก</strong></label>
+      <select id="medPreset">
+        <option value="">-- หรือเลือกยากันชักและขนาดยาที่พบบ่อย --</option>
+        <optgroup label="Sodium Valproate (Depakine)">
+          <option value="depakine-500-bid">Depakine Chrono 500 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="depakine-500-hs">Depakine Chrono 500 mg · 1 เม็ด ก่อนนอน (20:00)</option>
+          <option value="depakine-200-bid">Depakine 200 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Levetiracetam (Keppra)">
+          <option value="keppra-500-bid">Keppra 500 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="keppra-250-bid">Keppra 250 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="keppra-1000-bid">Keppra 1,000 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Phenytoin (Dilantin)">
+          <option value="dilantin-100-hs">Dilantin 100 mg · 3 แคปซูล ก่อนนอน (20:00)</option>
+          <option value="dilantin-100-bid">Dilantin 100 mg · 1 แคปซูล เช้า-เย็น (08:00, 20:00)</option>
+          <option value="dilantin-100-hs2">Dilantin 100 mg · 2 แคปซูล ก่อนนอน (20:00)</option>
+        </optgroup>
+        <optgroup label="Carbamazepine (Tegretol)">
+          <option value="tegretol-200-bid">Tegretol 200 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="tegretol-cr-400-bid">Tegretol CR 400 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Lamotrigine (Lamictal)">
+          <option value="lamictal-25-bid">Lamictal 25 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="lamictal-50-bid">Lamictal 50 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="lamictal-100-bid">Lamictal 100 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Topiramate (Topamax)">
+          <option value="topamax-25-bid">Topamax 25 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="topamax-50-bid">Topamax 50 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Oxcarbazepine (Trileptal)">
+          <option value="trileptal-300-bid">Trileptal 300 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="trileptal-600-bid">Trileptal 600 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Phenobarbital">
+          <option value="phenobarb-60-hs">Phenobarbital 60 mg · 1 เม็ด ก่อนนอน (20:00)</option>
+          <option value="phenobarb-30-hs">Phenobarbital 30 mg · 1 เม็ด ก่อนนอน (20:00)</option>
+        </optgroup>
+        <optgroup label="Clonazepam (Rivotril)">
+          <option value="rivotril-05-hs">Rivotril 0.5 mg · 1 เม็ด ก่อนนอน (20:00)</option>
+          <option value="rivotril-2-hs">Rivotril 2 mg · 0.5 เม็ด ก่อนนอน (20:00)</option>
+        </optgroup>
+        <optgroup label="Lacosamide (Vimpat)">
+          <option value="vimpat-50-bid">Vimpat 50 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+          <option value="vimpat-100-bid">Vimpat 100 mg · 1 เม็ด เช้า-เย็น (08:00, 20:00)</option>
+        </optgroup>
+        <optgroup label="Gabapentin (Neurontin)">
+          <option value="neurontin-300-tid">Neurontin 300 mg · 1 แคปซูล เช้า-กลางวัน-เย็น (08:00, 12:00, 18:00)</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <label>ชื่อยา<input id="adminMedName" required maxlength="120" placeholder="เช่น Depakine Chrono 500 mg"></label>
+    <label>ขนาดและวิธีรับประทานตามคำสั่งแพทย์<input id="adminMedDosage" required maxlength="120" placeholder="เช่น 1 เม็ด วันละ 2 ครั้ง หลังอาหาร"></label>
+
+    <label>เวลาที่รับประทาน (คั่นด้วยจุลภาค)
+      <input id="adminMedTimes" placeholder="08:00, 20:00" required>
+    </label>
+
+    <div class="quick-times-container">
+      <span class="quick-title">กดเลือกเวลาด่วน:</span>
+      <div class="chips-row">
+        <button type="button" class="chip-btn" data-time="08:00, 20:00">เช้า-เย็น (08:00, 20:00)</button>
+        <button type="button" class="chip-btn" data-time="20:00">ก่อนนอน (20:00)</button>
+        <button type="button" class="chip-btn" data-time="08:00, 12:00, 18:00">3 เวลา (08:00, 12:00, 18:00)</button>
+        <button type="button" class="chip-btn" data-time="08:00, 12:00, 18:00, 20:00">4 เวลา</button>
+        <button type="button" class="chip-btn" data-time="08:00">เช้าครั้งเดียว (08:00)</button>
+      </div>
+    </div>
+
+    <p class="dialog-note">ผู้ป่วยจะได้รับแผนยาเมื่อแอปเชื่อมต่อ ส่วนกลางจะส่งการแจ้งเตือนเตือนกินยาก่อนเวลาตามที่ผู้ป่วยตั้งไว้</p>
+    <div class="actions">
+      <button type="button" class="secondary" id="cancelMedication">ยกเลิก</button>
+      <button type="submit" class="btn-save-med"><i class="fas fa-check"></i> บันทึกแผนยา</button>
+    </div>
+  </form>
+</dialog>
+</main>
+<script src="cloud-config.js"></script>
+<script src="admin.js"></script>
+</body></html>
