@@ -252,7 +252,12 @@ let missedDoseStep = 'frequency';
 let missedDoseFreq = 0;
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,9); }
-function getDateStr(d) { return d.toISOString().split('T')[0]; }
+function getDateStr(d) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 function getTimeStr() { const n=new Date(); return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0'); }
 
 function userKey(key) { return `seizguard_${currentUser}_${key}`; }
@@ -275,6 +280,34 @@ function loadUsers() {
 
 function saveUsers(users) {
   localStorage.setItem('seizguard_users', JSON.stringify(users));
+}
+
+function createSeizGuardId(users = loadUsers()) {
+  if (!window.crypto || !window.crypto.getRandomValues) {
+    throw new Error('Secure browser randomness is unavailable');
+  }
+  const existingIds = new Set(Object.values(users).map(account => account?.seizguardId).filter(Boolean));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const bytes = new Uint8Array(8);
+    window.crypto.getRandomValues(bytes);
+    const hex = bytesToHex(bytes).toUpperCase();
+    const id = `SG-${hex.match(/.{1,4}/g).join('-')}`;
+    if (!existingIds.has(id)) return id;
+  }
+  throw new Error('Could not generate a unique SeizGuard ID');
+}
+
+function getSeizGuardIdForCurrentUser() {
+  if (!currentUser) return '';
+  const users = loadUsers();
+  const account = users[currentUser];
+  if (!account) return '';
+  if (!account.seizguardId) {
+    account.seizguardId = createSeizGuardId(users);
+    users[currentUser] = account;
+    saveUsers(users);
+  }
+  return account.seizguardId;
 }
 
 function bytesToHex(bytes) {
@@ -355,6 +388,7 @@ async function handleLogin() {
   }
 
   try {
+    let accountChanged = false;
     if (account.pinSalt && account.pinHash) {
       if (await hashPin(pin, account.pinSalt) !== account.pinHash) {
         showToast('ชื่อผู้ใช้หรือ PIN ไม่ถูกต้อง');
@@ -365,6 +399,13 @@ async function handleLogin() {
       account.pinSalt = createPinSalt();
       account.pinHash = await hashPin(pin, account.pinSalt);
       delete account.hn;
+      accountChanged = true;
+    }
+    if (!account.seizguardId) {
+      account.seizguardId = createSeizGuardId(users);
+      accountChanged = true;
+    }
+    if (accountChanged) {
       users[username] = account;
       saveUsers(users);
     }
@@ -407,6 +448,7 @@ async function handleRegister() {
     const account = existing && typeof existing === 'object' ? existing : {};
     account.pinSalt = createPinSalt();
     account.pinHash = await hashPin(pin, account.pinSalt);
+    if (!account.seizguardId) account.seizguardId = createSeizGuardId(users);
     delete account.hn;
     users[username] = account;
     saveUsers(users);
@@ -1046,6 +1088,7 @@ function saveSideEffectLog() {
   const log = {
     id: genId(),
     date: document.getElementById('sideEffectDate').textContent,
+    time: getTimeStr(),
     medicationId: selectedSideEffectMedId,
     effects: [...selectedSideEffects],
     severity: selectedSideEffectSeverity,
@@ -1100,6 +1143,7 @@ function renderProfile() {
 
   const editIcon = editingProfile ? 'fa-check' : 'fa-pen';
   document.getElementById('editProfileBtn').innerHTML = `<i class="fas ${editIcon}"></i>`;
+  const seizGuardId = getSeizGuardIdForCurrentUser();
 
   const fields = [
     { section:'ข้อมูลผู้ป่วย', icon:'fa-user', color:'var(--primary)', rows:[
@@ -1131,6 +1175,12 @@ function renderProfile() {
       </div>
     </div>`
   ).join('');
+  document.getElementById('profileContent').insertAdjacentHTML('afterbegin', `
+    <div class="detail-card">
+      <h4>รหัส SeizGuard ของคุณ</h4>
+      <p style="font-size:20px;font-weight:700;letter-spacing:1px;color:var(--primary);margin:8px 0">${seizGuardId || 'ยังไม่กำหนด'}</p>
+      <p style="font-size:12px;color:var(--text3);margin:0">ใช้รหัสนี้เชื่อมบันทึกในแอป รหัสนี้ไม่ใช่ชื่อหรือ HN และไม่ใช่ PIN สำหรับเข้าสู่ระบบ</p>
+    </div>`);
 }
 
 function toggleEditProfile() {
@@ -1229,6 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const users = JSON.parse(localStorage.getItem('seizguard_users') || '{}');
     if (users[saved]) {
       currentUser = saved;
+      getSeizGuardIdForCurrentUser();
       enterApp();
       return;
     }
@@ -1243,106 +1294,151 @@ document.querySelectorAll('.modal').forEach(modal => {
 });
 
 
-/* ===== GOOGLE SHEET INTEGRATION ===== */
-// Google Form URL
-const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfAukHlHfPDMztqyVgnmEBBhFB3doYNVfkziA9r6Z4gHPbGyA/formResponse';
+/* ===== GOOGLE FORM / SHEETS INTEGRATION ===== */
+const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSdBIUKyfV-B3wyOnLs6D6zfH8DgbIrkqaE-7Mx6c7zQqLsxHg/formResponse';
+const GOOGLE_FORM_RESPONSES_ENABLED = false; // Keep off while the form is an unpublished draft.
 
-// ฟิลด์ ID ของ Google Form
-const FORM_FIELDS = {
-  username: 'entry.607237854',
-  date: 'entry.1957480164',
-  medName: 'entry.279375545',
-  status: 'entry.1642115361',
-  actualTime: 'entry.1324849634',
-  seizure: 'entry.1692092125',
-  seizureSeverity: 'entry.219841705',
-  sideEffect: 'entry.341674460',
-  sideEffectType: 'entry.273226191',
-  sideEffectSeverity: 'entry.294989148'
-};
+const FORM_FIELDS = Object.freeze({
+  seizguardId: 'entry.116504668',
+  eventType: 'entry.867282434',
+  eventDatetime: 'entry.1359843129',
+  medicationName: 'entry.1761273207',
+  doseStatus: 'entry.257681182',
+  takenTime: 'entry.1792851685',
+  seizureDuration: 'entry.396048566',
+  seizureSymptoms: 'entry.1804424570',
+  seizureSeverity: 'entry.678489377',
+  sideEffectSymptoms: 'entry.87307514',
+  sideEffectSeverity: 'entry.1138630177',
+  notes: 'entry.894138100'
+});
 
-// ฟังก์ชันสำหรับส่งข้อมูลไปยัง Google Sheet
-function submitToGoogleSheet() {
-  const username = currentUser;
+function formatFormEventDatetime(date, time) {
+  const safeDate = String(date || '').trim();
+  const safeTime = String(time || '').trim();
+  if (!safeDate) return '';
+  return safeTime ? `${safeDate} ${safeTime}` : `${safeDate} (ไม่ทราบเวลา)`;
+}
+
+function buildGoogleFormRows() {
+  const seizguardId = getSeizGuardIdForCurrentUser();
+  if (!seizguardId) return [];
 
   const meds = getData('medications');
-  const medLogs = getData('medLogs');
-  const seizures = getData('seizures');
-  const sideEffects = getData('sideEffects');
-  
-  if (meds.length === 0 && medLogs.length === 0 && seizures.length === 0 && sideEffects.length === 0) {
-    showToast('ไม่มีข้อมูลที่จะส่ง');
-    return;
-  }
-  
-  let submittedCount = 0;
-  
-  // ส่งข้อมูลการกินยา
-  medLogs.forEach((log) => {
-    const med = meds.find(m => m.id === log.medicationId);
-    if (med) {
-      const formData = new FormData();
-      formData.append(FORM_FIELDS.username, username);
-      formData.append(FORM_FIELDS.date, log.date);
-      formData.append(FORM_FIELDS.medName, med.name);
-      formData.append(FORM_FIELDS.status, log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน');
-      
-      if (log.actualTime) {
-        formData.append(FORM_FIELDS.actualTime, log.actualTime);
-      }
-      
-      // ส่งข้อมูลการชัก
-      const seizure = seizures.find(s => s.date === log.date);
-      if (seizure) {
-        formData.append(FORM_FIELDS.seizure, 'มี');
-        formData.append(FORM_FIELDS.seizureSeverity, seizure.severity || '');
-      } else {
-        formData.append(FORM_FIELDS.seizure, 'ไม่มี');
-      }
-      
-      // ส่งข้อมูลผลข้างเคียง
-      const sideEffect = sideEffects.find(s => s.date === log.date);
-      if (sideEffect) {
-        formData.append(FORM_FIELDS.sideEffect, 'มี');
-        formData.append(FORM_FIELDS.sideEffectType, sideEffect.symptoms?.join(', ') || '');
-        formData.append(FORM_FIELDS.sideEffectSeverity, sideEffect.severity || '');
-      } else {
-        formData.append(FORM_FIELDS.sideEffect, 'ไม่มี');
-      }
-      
-      // ส่งข้อมูลไปยัง Google Form
-      fetch(GOOGLE_FORM_URL, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors'
-      }).then(() => {
-        submittedCount++;
-      }).catch(err => {
-        console.error('Error:', err);
-      });
+  const doseLogs = getData('medLogs');
+  const seizureLogs = getData('seizureLogs');
+  const sideEffectLogs = getData('sideEffectLogs');
+  const rows = [];
+
+  doseLogs.forEach(log => {
+    // Pending doses include future reminders, so only export a recorded outcome.
+    if (!['taken', 'missed'].includes(log.status)) return;
+    const med = meds.find(item => item.id === log.medicationId);
+    if (!med) return;
+    rows.push({
+      recordId: log.id,
+      seizguardId,
+      eventType: 'การรับประทานยา',
+      eventDatetime: formatFormEventDatetime(log.date, log.scheduledTime),
+      medicationName: med.name,
+      doseStatus: log.status === 'taken' ? 'กินแล้ว' : 'ยังไม่กิน',
+      takenTime: log.status === 'taken' ? (log.takenTime || '') : ''
+    });
+  });
+
+  seizureLogs.forEach(log => {
+    rows.push({
+      recordId: log.id,
+      seizguardId,
+      eventType: 'อาการชัก',
+      eventDatetime: formatFormEventDatetime(log.date, log.time),
+      seizureDuration: log.duration || '',
+      seizureSymptoms: (log.symptoms || []).join(', '),
+      seizureSeverity: Number(log.severity) > 0 ? log.severity : ''
+    });
+  });
+
+  sideEffectLogs.forEach(log => {
+    const med = meds.find(item => item.id === log.medicationId);
+    rows.push({
+      recordId: log.id,
+      seizguardId,
+      eventType: 'อาการข้างเคียง',
+      eventDatetime: formatFormEventDatetime(log.date, log.time),
+      medicationName: med?.name || '',
+      sideEffectSymptoms: (log.effects || []).join(', '),
+      sideEffectSeverity: Number(log.severity) > 0 ? log.severity : ''
+    });
+  });
+
+  return rows.filter(row => row.eventDatetime);
+}
+
+function createGoogleFormData(row) {
+  const formData = new FormData();
+  Object.entries(FORM_FIELDS).forEach(([key, entryId]) => {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value) !== '') {
+      formData.append(entryId, String(value));
     }
   });
-  
-  setTimeout(() => {
-    showToast(`ส่งข้อมูล ${submittedCount} รายการไปยัง Google Sheet สำเร็จ!`);
-  }, 500);
+  return formData;
 }
 
-// เพิ่มปุ่มส่งข้อมูลในหน้า Profile
+async function submitToGoogleSheet() {
+  if (!GOOGLE_FORM_RESPONSES_ENABLED) {
+    showToast('ฟอร์มยังเป็นฉบับร่าง จึงยังไม่ส่งข้อมูล');
+    return;
+  }
+  if (!currentUser) {
+    showToast('กรุณาเข้าสู่ระบบก่อน');
+    return;
+  }
+
+  const rows = buildGoogleFormRows();
+  if (rows.length === 0) {
+    showToast('ไม่มีรายการที่บันทึกผลแล้ว');
+    return;
+  }
+  if (!confirm(`เตรียมส่ง ${rows.length} รายการไปยัง Google Form หรือไม่? Google Forms ไม่ส่งสถานะยืนยันกลับ และการกดซ้ำอาจทำให้เกิดแถวซ้ำ`)) return;
+
+  let requestCount = 0;
+  let failedCount = 0;
+  for (const row of rows) {
+    try {
+      await fetch(GOOGLE_FORM_URL, {
+        method: 'POST',
+        body: createGoogleFormData(row),
+        mode: 'no-cors'
+      });
+      requestCount++;
+    } catch (error) {
+      failedCount++;
+      console.error('Google Form request failed:', error);
+    }
+  }
+
+  showToast(`ส่งคำขอ ${requestCount} รายการ${failedCount ? ` ไม่สำเร็จ ${failedCount} รายการ` : ''} — เปิดชีตเพื่อตรวจผล`);
+}
+
 function addGoogleSheetButton() {
   const profileContent = document.getElementById('tabProfile');
-  if (profileContent && !document.getElementById('submitGoogleSheetBtn')) {
-    const btn = document.createElement('button');
-    btn.id = 'submitGoogleSheetBtn';
-    btn.className = 'btn-primary btn-large';
-    btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> ส่งข้อมูลไปยัง Google Sheet';
-    btn.onclick = submitToGoogleSheet;
-    btn.style.marginTop = '20px';
-    profileContent.appendChild(btn);
-  }
+  if (!profileContent || document.getElementById('submitGoogleSheetBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'submitGoogleSheetBtn';
+  btn.className = 'btn-primary btn-large';
+  btn.innerHTML = GOOGLE_FORM_RESPONSES_ENABLED
+    ? '<i class="fas fa-cloud-upload-alt"></i> ส่งบันทึกไปยัง Google Sheet'
+    : '<i class="fas fa-lock"></i> Google Form ยังเป็นฉบับร่าง';
+  btn.disabled = !GOOGLE_FORM_RESPONSES_ENABLED;
+  btn.title = GOOGLE_FORM_RESPONSES_ENABLED
+    ? 'ส่งเฉพาะรหัส SeizGuard และข้อมูลบันทึกที่มีโครงสร้าง'
+    : 'เปิดใช้งานหลังตรวจสอบและเผยแพร่แบบฟอร์มแล้ว';
+  btn.onclick = submitToGoogleSheet;
+  btn.style.marginTop = '20px';
+  profileContent.appendChild(btn);
 }
 
-// เรียกใช้เมื่อเข้าแอป
 window.addEventListener('load', () => {
   setTimeout(addGoogleSheetButton, 500);
 });
